@@ -15,7 +15,6 @@ REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onren
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
 app = Flask(__name__)
-# Changing the session secret forces all old browser sessions to expire immediately
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-v3-isolated-session-98214")
 
 EVENT_CACHE = {}
@@ -23,7 +22,7 @@ ZIP_GEO_CACHE = {}
 DB_FILE = "alerts.db"
 
 
-# --- DATABASE SETUP ---
+# --- DATABASE SETUP & AUTO-MIGRATION ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -59,6 +58,23 @@ def init_db():
         )
     """)
 
+    # Safe Schema Migrations for existing deployments
+    c.execute("PRAGMA table_info(user_wallet)")
+    columns = [col[1] for col in c.fetchall()]
+    if "user_id" not in columns:
+        try:
+            c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    c.execute("PRAGMA table_info(points_history)")
+    columns = [col[1] for col in c.fetchall()]
+    if "user_id" not in columns:
+        try:
+            c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+
     conn.commit()
     conn.close()
 
@@ -73,8 +89,8 @@ def create_spotify_oauth():
         client_secret=CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
         scope="user-top-read",
-        cache_path=None,   # Never look for or create a file on disk
-        show_dialog=True   # Force Spotify to ask who is logging in
+        cache_path=None,
+        show_dialog=True
     )
 
 
@@ -84,7 +100,6 @@ def get_current_user_sp():
         return None
 
     sp_oauth = create_spotify_oauth()
-    # Check if access token is expired and refresh if necessary
     if sp_oauth.is_token_expired(token_info):
         try:
             token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
@@ -113,7 +128,7 @@ def ensure_user_wallet_seeded(user_id):
     c = conn.cursor()
     c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
     if not c.fetchone():
-        c.execute("INSERT INTO user_wallet (user_id, points) VALUES (?, 250)", (user_id,))
+        c.execute("INSERT OR REPLACE INTO user_wallet (user_id, points) VALUES (?, 250)", (user_id,))
         c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Welcome Bonus', 250)", (user_id,))
         conn.commit()
     conn.close()
@@ -307,12 +322,13 @@ def redeem_perk():
 def get_artist_events():
     artist_name = request.args.get("artist", "").strip()
     postal_code = request.args.get("postal_code", "").strip()
+    latlong = request.args.get("latlong", "").strip()
     radius = request.args.get("radius", "150").strip()
 
     if not artist_name:
         return jsonify({"events": []})
 
-    cache_key = f"{artist_name}_{postal_code}_{radius}"
+    cache_key = f"{artist_name}_{postal_code}_{latlong}_{radius}"
     if cache_key in EVENT_CACHE:
         return jsonify({"events": EVENT_CACHE[cache_key]})
 
@@ -345,16 +361,18 @@ def get_artist_events():
         "size": 4
     }
 
-    if postal_code:
+    if latlong:
+        ev_params["latlong"] = latlong
+        ev_params["radius"] = radius
+        ev_params["unit"] = "miles"
+    elif postal_code:
         coords = get_lat_long_from_zip(postal_code)
         if coords:
             ev_params["latlong"] = coords
-            ev_params["radius"] = radius
-            ev_params["unit"] = "miles"
         else:
             ev_params["postalCode"] = postal_code
-            ev_params["radius"] = radius
-            ev_params["unit"] = "miles"
+        ev_params["radius"] = radius
+        ev_params["unit"] = "miles"
     else:
         ev_params["countryCode"] = "US"
 
@@ -382,6 +400,62 @@ def get_artist_events():
         pass
 
     EVENT_CACHE[cache_key] = events
+    return jsonify({"events": events})
+
+
+# --- LOCATE ME: EXPLORE ALL NEARBY CONCERTS ---
+@app.route("/api/events/nearby")
+def get_nearby_events():
+    latlong = request.args.get("latlong", "").strip()
+    postal_code = request.args.get("postal_code", "").strip()
+    radius = request.args.get("radius", "50").strip()
+
+    events_url = "https://app.ticketmaster.com/discovery/v2/events.json"
+    ev_params = {
+        "apikey": TM_API_KEY,
+        "classificationName": "Music",
+        "sort": "date,asc",
+        "size": 15
+    }
+
+    if latlong:
+        ev_params["latlong"] = latlong
+        ev_params["radius"] = radius
+        ev_params["unit"] = "miles"
+    elif postal_code:
+        coords = get_lat_long_from_zip(postal_code)
+        if coords:
+            ev_params["latlong"] = coords
+        else:
+            ev_params["postalCode"] = postal_code
+        ev_params["radius"] = radius
+        ev_params["unit"] = "miles"
+    else:
+        return jsonify({"events": []})
+
+    events = []
+    try:
+        ev_res = requests.get(events_url, params=ev_params, timeout=5)
+        if ev_res.status_code == 200:
+            raw = ev_res.json().get("_embedded", {}).get("events", [])
+            for ev in raw:
+                venues = ev.get("_embedded", {}).get("venues", [])
+                venue_name = venues[0].get("name", "TBD") if venues else "TBD"
+                city = venues[0].get("city", {}).get("name", "") if venues else ""
+                state = venues[0].get("state", {}).get("stateCode", "") if venues else ""
+
+                events.append({
+                    "id": ev.get("id"),
+                    "name": ev.get("name"),
+                    "date": ev.get("dates", {}).get("start", {}).get("localDate", "TBD"),
+                    "venue": venue_name,
+                    "city": city,
+                    "state": state,
+                    "url": ev.get("url", "#")
+                })
+    except Exception:
+        pass
+
     return jsonify({"events": events})
 
 
@@ -507,4 +581,3 @@ def scan_alerts():
 if __name__ == "__main__":
     print("\n🚀 TicketPulse running at http://127.0.0.1:5000\n")
     app.run(host="0.0.0.0", port=5000, debug=True)
-    
