@@ -12,18 +12,18 @@ load_dotenv()
 
 CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID", "9134fb3621004f549224f28c0c60a901")
 CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET", "7c528522f7ec4d509bead004491cfee6")
-REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://127.0.0.1:8080/callback")
+REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onrender.com/callback")
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-secret-key-prod-9941")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-secret-session-key-v2-secure")
 
 EVENT_CACHE = {}
 ZIP_GEO_CACHE = {}
 DB_FILE = "alerts.db"
 
 
-# --- DATABASE SETUP ---
+# --- DATABASE INITIALIZATION ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -66,8 +66,9 @@ def init_db():
 init_db()
 
 
-# --- SPOTIFY AUTH UTILITIES ---
+# --- SPOTIFY PER-USER SESSION AUTH ---
 def get_auth_manager():
+    # Store token strictly inside user's browser session cookie
     cache_handler = FlaskSessionCacheHandler(session)
     return SpotifyOAuth(
         client_id=CLIENT_ID,
@@ -75,13 +76,15 @@ def get_auth_manager():
         redirect_uri=REDIRECT_URI,
         scope="user-top-read",
         cache_handler=cache_handler,
-        show_dialog=False
+        cache_path=None,   # Explicitly disable reading or writing any .cache file on disk
+        show_dialog=True   # Always prompt login so users do not auto-inherit browser sessions
     )
 
 
 def get_current_user_sp():
     auth_manager = get_auth_manager()
-    if not auth_manager.validate_token(auth_manager.cache_handler.get_access_token()):
+    token = auth_manager.cache_handler.get_access_token()
+    if not token or not auth_manager.validate_token(token):
         return None, auth_manager
     return spotipy.Spotify(auth_manager=auth_manager), auth_manager
 
@@ -109,7 +112,7 @@ def ensure_user_wallet_seeded(user_id):
     conn.close()
 
 
-# --- HELPER UTILITIES ---
+# --- LOCATION & GENRE UTILITIES ---
 def get_lat_long_from_zip(zip_code):
     zip_str = str(zip_code).strip()
     if not zip_str:
@@ -149,7 +152,7 @@ def categorize_genres(genre_list):
     return "Rock" if not text else "Other"
 
 
-# --- FLASK ROUTES ---
+# --- APPLICATION ROUTES ---
 @app.route("/")
 def home():
     sp, auth_manager = get_current_user_sp()
@@ -162,6 +165,7 @@ def home():
     try:
         results = sp.current_user_top_artists(limit=30, time_range="medium_term")
     except Exception:
+        session.clear()
         return redirect("/login")
 
     artists = []
@@ -376,9 +380,6 @@ def get_releases():
     sp, _ = get_current_user_sp()
     if not sp:
         return jsonify({"releases": []})
-
-    user_id = get_user_id(sp)
-    cache_key = f"releases_{user_id}"
 
     try:
         results = sp.current_user_top_artists(limit=10, time_range="medium_term")
