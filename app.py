@@ -14,7 +14,7 @@ CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET", "7c528522f7ec4d509bead004491c
 REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onrender.com/callback")
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
-# Affiliate tracking parameters (Replace with your Impact / Ticketmaster IDs when approved)
+# Affiliate tracking parameters (Impact / Ticketmaster)
 AFFILIATE_CAMPAIGN_ID = os.getenv("AFFILIATE_CAMPAIGN_ID", "4272")
 AFFILIATE_PUB_ID = os.getenv("AFFILIATE_PUB_ID", "ticketpulse")
 
@@ -65,9 +65,22 @@ def init_db():
     # Schema migration checks
     c.execute("PRAGMA table_info(user_wallet)")
     columns = [col[1] for col in c.fetchall()]
+    if "user_id" not in columns:
+        try:
+            c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
+        except sqlite3.OperationalError:
+            pass
     if "email" not in columns:
         try:
             c.execute("ALTER TABLE user_wallet ADD COLUMN email TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    c.execute("PRAGMA table_info(points_history)")
+    columns = [col[1] for col in c.fetchall()]
+    if "user_id" not in columns:
+        try:
+            c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
         except sqlite3.OperationalError:
             pass
 
@@ -136,10 +149,6 @@ def ensure_user_wallet_seeded(user_id, email=""):
 
 
 def wrap_affiliate_url(target_url):
-    """
-    Appends Ticketmaster / Impact partner parameters.
-    When registered on Ticketmaster's Impact network, clicks resolve with tracking.
-    """
     if not target_url or target_url == "#":
         return "#"
     separator = "&" if "?" in target_url else "?"
@@ -182,7 +191,7 @@ def categorize_genres(genre_list):
     return "Rock" if not text else "Other"
 
 
-# --- ROUTES ---
+# --- FLASK ROUTES ---
 @app.route("/")
 def home():
     sp = get_current_user_sp()
@@ -283,7 +292,6 @@ def save_user_email():
     c = conn.cursor()
     c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
     
-    # Award 100 points for verifying/linking email if not already claimed
     c.execute("SELECT id FROM points_history WHERE user_id = ? AND action LIKE '%Email Verified%'", (user_id,))
     if not c.fetchone():
         c.execute("UPDATE user_wallet SET points = points + 100 WHERE user_id = ?", (user_id,))

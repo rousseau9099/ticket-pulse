@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>TicketPulse</title>
   
+  <!-- Impact Affiliate Site Verification -->
+  <meta name='impact-site-verification' value='9a3ee732-0041-47ec-a4cb-1249e556fa5b'>
+  
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0d10">
   
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-  <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/concert.png">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.svg') }}">
   
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -18,8 +22,8 @@
       --bg: #0b0d10;
       --card-bg: #14181f;
       --card-border: #1f2530;
-      --accent: #1db954;
-      --accent-hover: #1aa34a;
+      --accent: #00f0ff;
+      --pink: #ff2a85;
       --point: #f59e0b;
       --danger: #ef4444;
       --text-main: #f3f4f6;
@@ -42,8 +46,18 @@
       padding-bottom: 0.75rem;
       border-bottom: 1px solid var(--card-border);
     }
-    h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
-    h1 span { color: var(--accent); }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+    }
+    h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+    h1 span { color: var(--pink); }
     
     .header-actions { display: flex; align-items: center; gap: 0.5rem; }
     .loyalty-widget {
@@ -129,7 +143,7 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    .feed-toggle-btn.active { background: var(--accent); color: #000; }
+    .feed-toggle-btn.active { background: var(--pink); color: #fff; }
 
     .category-scroll {
       display: flex;
@@ -191,7 +205,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-track.tracking { background: rgba(29, 185, 84, 0.15); border-color: var(--accent); color: var(--accent); }
+    .btn-track.tracking { background: rgba(0, 240, 255, 0.15); border-color: var(--accent); color: var(--accent); }
 
     .events-box { display: flex; flex-direction: column; gap: 0.6rem; }
     .event-chip {
@@ -208,8 +222,8 @@
     .event-title { font-size: 0.85rem; font-weight: 600; margin: 0.15rem 0; }
     .event-venue { font-size: 0.75rem; color: var(--text-muted); }
     .btn-ticket {
-      background: var(--accent);
-      color: #000;
+      background: var(--pink);
+      color: #fff;
       border: none;
       padding: 0.45rem 0.75rem;
       border-radius: 6px;
@@ -293,7 +307,7 @@
       background: none;
       border: none;
     }
-    .nav-tab.active { color: var(--accent); }
+    .nav-tab.active { color: var(--pink); }
     .nav-icon { font-size: 1.2rem; }
 
     /* Modal */
@@ -331,7 +345,8 @@
 <body>
   <div class="container">
     <header>
-      <div>
+      <div class="brand-group">
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="TicketPulse Logo" class="brand-logo">
         <h1>Ticket<span>Pulse</span></h1>
       </div>
       <div class="header-actions">
@@ -414,11 +429,11 @@
     <div id="view-account" class="tab-view">
       <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">👤 Account & Rewards Profile</div>
       <div class="profile-card">
-        <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎧</div>
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Logo" style="width: 64px; height: 64px; margin-bottom: 0.75rem;">
         <h3 style="margin-bottom: 0.25rem;">Spotify Connected</h3>
         <p id="profile-email" style="color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem;">Syncing email...</p>
         <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
-          Tickets purchased through TicketPulse links earn 50 PTS per click and qualify toward perks and giveaways.
+          Tickets clicked through TicketPulse links earn 50 PTS and count toward merch codes and perks.
         </p>
         <a href="/logout" class="btn-logout" onclick="clearLocalClientStorage()">
           🚪 Log Out / Switch Spotify Account

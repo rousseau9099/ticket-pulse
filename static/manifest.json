@@ -1,0 +1,17 @@
+{
+  "name": "TicketPulse",
+  "short_name": "TicketPulse",
+  "description": "Live concert radar and ticket discovery engine",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    {
+      "src": "/static/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
