@@ -45,11 +45,7 @@
     h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
     h1 span { color: var(--accent); }
     
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
+    .header-actions { display: flex; align-items: center; gap: 0.5rem; }
     .loyalty-widget {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -69,7 +65,6 @@
       font-size: 0.75rem;
     }
 
-    /* Radar Box & Locate Me */
     .radar-box {
       background: #11151c;
       border: 1px solid #1f2838;
@@ -114,7 +109,6 @@
       cursor: pointer;
     }
 
-    /* Toggle bar between Favorites & Discover All */
     .feed-toggle {
       display: flex;
       background: #14181f;
@@ -135,10 +129,7 @@
       border-radius: 6px;
       cursor: pointer;
     }
-    .feed-toggle-btn.active {
-      background: var(--accent);
-      color: #000;
-    }
+    .feed-toggle-btn.active { background: var(--accent); color: #000; }
 
     .category-scroll {
       display: flex;
@@ -160,11 +151,7 @@
       font-size: 0.8rem;
       white-space: nowrap;
     }
-    .pill.active {
-      background: var(--accent);
-      color: #000;
-      border-color: var(--accent);
-    }
+    .pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
 
     .tab-view { display: none; }
     .tab-view.active { display: block; }
@@ -204,11 +191,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-track.tracking {
-      background: rgba(29, 185, 84, 0.15);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
+    .btn-track.tracking { background: rgba(29, 185, 84, 0.15); border-color: var(--accent); color: var(--accent); }
 
     .events-box { display: flex; flex-direction: column; gap: 0.6rem; }
     .event-chip {
@@ -248,12 +231,7 @@
       gap: 1rem;
       margin-bottom: 0.75rem;
     }
-    .release-art {
-      width: 64px;
-      height: 64px;
-      border-radius: 8px;
-      object-fit: cover;
-    }
+    .release-art { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
     .btn-listen {
       background: #1f2937;
       border: 1px solid #374151;
@@ -266,7 +244,6 @@
       margin-left: auto;
       white-space: nowrap;
     }
-    .btn-listen:hover { background: var(--accent); color: #000; }
 
     /* Account / Profile View */
     .profile-card {
@@ -290,12 +267,7 @@
       margin-top: 1rem;
       cursor: pointer;
     }
-    .btn-logout:hover {
-      background: var(--danger);
-      color: #fff;
-    }
 
-    /* Bottom Navigation */
     .mobile-bottom-bar {
       position: fixed;
       bottom: 0;
@@ -324,7 +296,7 @@
     .nav-tab.active { color: var(--accent); }
     .nav-icon { font-size: 1.2rem; }
 
-    /* Wallet Modal */
+    /* Modal */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -346,6 +318,13 @@
       padding: 1.25rem;
       max-height: 85vh;
       overflow-y: auto;
+    }
+    .email-banner {
+      background: #19212d;
+      border: 1px dashed var(--point);
+      border-radius: 10px;
+      padding: 0.85rem;
+      margin-bottom: 1rem;
     }
   </style>
 </head>
@@ -387,14 +366,12 @@
         <button class="feed-toggle-btn" id="btn-mode-nearby" onclick="switchRadarMode('nearby')">Explore All Nearby Shows</button>
       </div>
 
-      <!-- Categories for Spotify Artists -->
       <div id="category-bar" class="category-scroll">
         {% for cat in categories %}
           <button class="pill {% if cat == 'All' %}active{% endif %}" onclick="filterCategory('{{ cat }}')">{{ cat }}</button>
         {% endfor %}
       </div>
 
-      <!-- Mode 1: Spotify Artist Feed -->
       <div id="feed-artists" class="artist-feed">
         {% for artist in artists %}
           <div class="artist-card" data-category="{{ artist.category }}">
@@ -419,7 +396,6 @@
         {% endfor %}
       </div>
 
-      <!-- Mode 2: All Nearby Live Shows Feed -->
       <div id="feed-nearby" class="artist-feed" style="display: none;">
         <div class="status-msg" id="nearby-status">Tap "Locate Me" or enter a zip code to scan all live music nearby.</div>
         <div id="nearby-events-container" class="events-box"></div>
@@ -436,12 +412,13 @@
 
     <!-- TAB 3: ACCOUNT VIEW -->
     <div id="view-account" class="tab-view">
-      <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">👤 Account & Session</div>
+      <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">👤 Account & Rewards Profile</div>
       <div class="profile-card">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎧</div>
-        <h3 style="margin-bottom: 0.5rem;">Spotify Connected</h3>
+        <h3 style="margin-bottom: 0.25rem;">Spotify Connected</h3>
+        <p id="profile-email" style="color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem;">Syncing email...</p>
         <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
-          Your personal artist radar and wallet points are isolated to this device's session.
+          Tickets purchased through TicketPulse links earn 50 PTS per click and qualify toward perks and giveaways.
         </p>
         <a href="/logout" class="btn-logout" onclick="clearLocalClientStorage()">
           🚪 Log Out / Switch Spotify Account
@@ -481,6 +458,17 @@
         <h2 style="font-size: 1.2rem;">Pulse Wallet</h2>
         <button onclick="closeLocker()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
       </div>
+
+      <!-- Email Capture Banner -->
+      <div class="email-banner" id="email-verify-box">
+        <div style="font-size:0.8rem; font-weight:800; color:var(--point); margin-bottom:0.25rem;">⚡ VERIFY EMAIL (+100 PTS)</div>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">Link your email to unlock reward promo codes and ticket presale alerts.</div>
+        <div style="display:flex; gap:0.4rem;">
+          <input type="email" id="wallet-email-input" placeholder="Your Email Address" style="flex:1; background:#0b0d10; border:1px solid #2d3748; color:#fff; padding:0.4rem 0.6rem; border-radius:6px; font-size:0.8rem;">
+          <button onclick="submitEmail()" style="background:var(--point); color:#000; border:none; font-weight:700; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.8rem; cursor:pointer;">Claim</button>
+        </div>
+      </div>
+
       <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">PERKS</div>
       <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
         <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
@@ -490,8 +478,16 @@
           </div>
           <button onclick="redeem(150, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">150 PTS</button>
         </div>
+        <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.85rem; font-weight:600;">VIP Early Entry Pass</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Venue Fast-Track code</div>
+          </div>
+          <button onclick="redeem(350, 'VIP Early Entry Pass')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">350 PTS</button>
+        </div>
       </div>
-      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">ACTIVITY</div>
+
+      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">POINTS ACTIVITY</div>
       <div id="history-box" style="background:#0a0c10; padding:0.5rem; border-radius:8px; font-size:0.75rem; max-height:140px; overflow-y:auto;"></div>
     </div>
   </div>
@@ -523,18 +519,11 @@
       document.getElementById('category-bar').style.display = isArtists ? 'flex' : 'none';
       document.getElementById('feed-artists').style.display = isArtists ? 'flex' : 'none';
       document.getElementById('feed-nearby').style.display = !isArtists ? 'block' : 'none';
-
-      if (!isArtists) {
-        fetchNearbyShows();
-      }
+      if (!isArtists) fetchNearbyShows();
     }
 
     function locateMe() {
-      if (!navigator.geolocation) {
-        alert('Geolocation is not supported by your browser.');
-        return;
-      }
-
+      if (!navigator.geolocation) return alert('Geolocation not supported by your browser.');
       const btnText = document.getElementById('locate-btn-text');
       btnText.innerText = 'Locating...';
 
@@ -544,7 +533,6 @@
           const lon = position.coords.longitude.toFixed(4);
           currentCoords = `${lat},${lon}`;
           localStorage.setItem('radar_coords', currentCoords);
-
           document.getElementById('radar-zip').value = '';
           localStorage.removeItem('radar_zip');
           btnText.innerText = '📍 GPS Set';
@@ -555,11 +543,11 @@
             fetchAllArtistEvents();
           }
         },
-        (error) => {
+        () => {
           btnText.innerText = 'Locate Me';
-          alert('Could not retrieve location. Please check browser GPS permissions.');
+          alert('GPS access denied. Check your browser permissions.');
         },
-        { timeout: 10000, enableHighAccuracy: false }
+        { timeout: 10000 }
       );
     }
 
@@ -573,11 +561,9 @@
       container.innerHTML = '';
 
       let query = `/api/events/nearby?radius=${radius}`;
-      if (currentCoords) {
-        query += `&latlong=${encodeURIComponent(currentCoords)}`;
-      } else if (zip) {
-        query += `&postal_code=${encodeURIComponent(zip)}`;
-      } else {
+      if (currentCoords) query += `&latlong=${encodeURIComponent(currentCoords)}`;
+      else if (zip) query += `&postal_code=${encodeURIComponent(zip)}`;
+      else {
         status.innerText = 'Tap "Locate Me" or enter a zip code to scan shows.';
         return;
       }
@@ -601,9 +587,70 @@
             </div>
           `).join('');
         })
-        .catch(() => {
-          status.innerText = 'Error loading nearby concerts.';
+        .catch(() => { status.innerText = 'Error loading nearby concerts.'; });
+    }
+
+    function handleTicketClick(url, eventName) {
+      fetch('/api/wallet/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_name: eventName })
+      })
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('points-display').innerText = `${d.new_balance} PTS`;
+      });
+      window.open(url, '_blank');
+    }
+
+    function refreshWallet() {
+      fetch('/api/wallet')
+        .then(r => r.json())
+        .then(d => {
+          document.getElementById('points-display').innerText = `${d.points} PTS`;
+          if (d.email) {
+            document.getElementById('wallet-email-input').value = d.email;
+            document.getElementById('profile-email').innerText = `Linked: ${d.email}`;
+            document.getElementById('email-verify-box').style.display = 'none';
+          }
+          const box = document.getElementById('history-box');
+          box.innerHTML = (d.history || []).map(h => `
+            <div style="display:flex; justify-content:space-between; padding:0.25rem 0; border-bottom:1px solid #161a22;">
+              <span>${h.action}</span>
+              <strong style="color:${h.points >= 0 ? 'var(--accent)' : '#ef4444'}">${h.points >= 0 ? '+' : ''}${h.points}</strong>
+            </div>
+          `).join('') || '<div style="color:var(--text-muted)">No activity yet</div>';
         });
+    }
+
+    function submitEmail() {
+      const email = document.getElementById('wallet-email-input').value.trim();
+      fetch('/api/user/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email })
+      })
+      .then(r => r.json().then(b => ({ status: r.status, b: b })))
+      .then(({ status, b }) => {
+        alert(b.message);
+        if (status === 200) refreshWallet();
+      });
+    }
+
+    function openLocker() { refreshWallet(); document.getElementById('locker-modal').classList.add('open'); }
+    function closeLocker() { document.getElementById('locker-modal').classList.remove('open'); }
+
+    function redeem(cost, perk) {
+      fetch('/api/wallet/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cost: cost, perk_name: perk })
+      })
+      .then(r => r.json().then(b => ({ status: r.status, b: b })))
+      .then(({ status, b }) => {
+        alert(b.message);
+        if (status === 200) refreshWallet();
+      });
     }
 
     function clearLocalClientStorage() {
@@ -634,54 +681,7 @@
             </div>
           `).join('');
           releasesLoaded = true;
-        })
-        .catch(() => {
-          document.getElementById('releases-feed').innerHTML = '<div class="status-msg">Failed to load music feed.</div>';
         });
-    }
-
-    function refreshWallet() {
-      fetch('/api/wallet')
-        .then(r => r.json())
-        .then(d => {
-          document.getElementById('points-display').innerText = `${d.points} PTS`;
-          const box = document.getElementById('history-box');
-          box.innerHTML = (d.history || []).map(h => `
-            <div style="display:flex; justify-content:space-between; padding:0.25rem 0; border-bottom:1px solid #161a22;">
-              <span>${h.action}</span>
-              <strong style="color:${h.points >= 0 ? 'var(--accent)' : '#ef4444'}">${h.points >= 0 ? '+' : ''}${h.points}</strong>
-            </div>
-          `).join('') || '<div style="color:var(--text-muted)">No activity yet</div>';
-        });
-    }
-
-    function openLocker() { refreshWallet(); document.getElementById('locker-modal').classList.add('open'); }
-    function closeLocker() { document.getElementById('locker-modal').classList.remove('open'); }
-
-    function redeem(cost, perk) {
-      fetch('/api/wallet/redeem', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cost: cost, perk_name: perk })
-      })
-      .then(r => r.json().then(b => ({ status: r.status, b: b })))
-      .then(({ status, b }) => {
-        alert(b.message);
-        if (status === 200) refreshWallet();
-      });
-    }
-
-    function handleTicketClick(url, eventName) {
-      fetch('/api/wallet/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_name: eventName })
-      })
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('points-display').innerText = `${d.new_balance} PTS`;
-      });
-      window.open(url, '_blank');
     }
 
     function fetchAllArtistEvents() {
@@ -692,11 +692,8 @@
         const artist = box.getAttribute('data-artist');
         setTimeout(() => {
           let url = `/api/events?artist=${encodeURIComponent(artist)}&radius=${radius}`;
-          if (currentCoords) {
-            url += `&latlong=${encodeURIComponent(currentCoords)}`;
-          } else if (zip) {
-            url += `&postal_code=${encodeURIComponent(zip)}`;
-          }
+          if (currentCoords) url += `&latlong=${encodeURIComponent(currentCoords)}`;
+          else if (zip) url += `&postal_code=${encodeURIComponent(zip)}`;
 
           fetch(url)
             .then(r => r.json())
@@ -731,11 +728,8 @@
       }
       localStorage.setItem('radar_radius', document.getElementById('radar-radius').value);
 
-      if (document.getElementById('btn-mode-nearby').classList.contains('active')) {
-        fetchNearbyShows();
-      } else {
-        fetchAllArtistEvents();
-      }
+      if (document.getElementById('btn-mode-nearby').classList.contains('active')) fetchNearbyShows();
+      else fetchAllArtistEvents();
     }
 
     function filterCategory(cat) {
@@ -771,18 +765,14 @@
         body: JSON.stringify({ artists: trackedArtists, postal_code: zip, radius: radius })
       })
       .then(r => r.json())
-      .then(res => {
-        alert(res.message);
-      });
+      .then(res => alert(res.message));
     }
 
     document.addEventListener('DOMContentLoaded', () => {
       refreshWallet();
       document.getElementById('radar-zip').value = localStorage.getItem('radar_zip') || '';
       document.getElementById('radar-radius').value = localStorage.getItem('radar_radius') || '150';
-      if (currentCoords) {
-        document.getElementById('locate-btn-text').innerText = '📍 GPS Set';
-      }
+      if (currentCoords) document.getElementById('locate-btn-text').innerText = '📍 GPS Set';
       
       document.querySelectorAll('.artist-card').forEach(c => {
         const n = c.querySelector('.artist-name').innerText;

@@ -1,18 +1,22 @@
 import os
 import sqlite3
+from urllib.parse import quote, urlencode
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 import requests
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-# --- LOAD ENVIRONMENT VARIABLES ---
 load_dotenv()
 
 CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID", "9134fb3621004f549224f28c0c60a901")
 CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET", "7c528522f7ec4d509bead004491cfee6")
 REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onrender.com/callback")
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
+
+# Affiliate tracking parameters (Replace with your Impact / Ticketmaster IDs when approved)
+AFFILIATE_CAMPAIGN_ID = os.getenv("AFFILIATE_CAMPAIGN_ID", "4272")
+AFFILIATE_PUB_ID = os.getenv("AFFILIATE_PUB_ID", "ticketpulse")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-v3-isolated-session-98214")
@@ -22,7 +26,6 @@ ZIP_GEO_CACHE = {}
 DB_FILE = "alerts.db"
 
 
-# --- DATABASE SETUP & AUTO-MIGRATION ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -44,6 +47,7 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS user_wallet (
             user_id TEXT PRIMARY KEY,
+            email TEXT,
             points INTEGER DEFAULT 250
         )
     """)
@@ -58,20 +62,12 @@ def init_db():
         )
     """)
 
-    # Safe Schema Migrations for existing deployments
+    # Schema migration checks
     c.execute("PRAGMA table_info(user_wallet)")
     columns = [col[1] for col in c.fetchall()]
-    if "user_id" not in columns:
+    if "email" not in columns:
         try:
-            c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-
-    c.execute("PRAGMA table_info(points_history)")
-    columns = [col[1] for col in c.fetchall()]
-    if "user_id" not in columns:
-        try:
-            c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
+            c.execute("ALTER TABLE user_wallet ADD COLUMN email TEXT")
         except sqlite3.OperationalError:
             pass
 
@@ -82,13 +78,12 @@ def init_db():
 init_db()
 
 
-# --- SPOTIFY AUTH UTILITY ---
 def create_spotify_oauth():
     return SpotifyOAuth(
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
-        scope="user-top-read",
+        scope="user-top-read user-read-email",
         cache_path=None,
         show_dialog=True
     )
@@ -111,38 +106,52 @@ def get_current_user_sp():
     return spotipy.Spotify(auth=token_info["access_token"])
 
 
-def get_user_id(sp):
-    if "spotify_user_id" in session:
-        return session["spotify_user_id"]
+def get_user_id_and_email(sp):
+    if "spotify_user_id" in session and "spotify_email" in session:
+        return session["spotify_user_id"], session["spotify_email"]
     try:
         user_data = sp.current_user()
-        uid = user_data.get("id")
+        uid = user_data.get("id", "guest_user")
+        email = user_data.get("email", "")
         session["spotify_user_id"] = uid
-        return uid
+        session["spotify_email"] = email
+        return uid, email
     except Exception:
-        return "guest_user"
+        return "guest_user", ""
 
 
-def ensure_user_wallet_seeded(user_id):
+def ensure_user_wallet_seeded(user_id, email=""):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
-    if not c.fetchone():
-        c.execute("INSERT OR REPLACE INTO user_wallet (user_id, points) VALUES (?, 250)", (user_id,))
+    c.execute("SELECT points, email FROM user_wallet WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        c.execute("INSERT OR REPLACE INTO user_wallet (user_id, email, points) VALUES (?, ?, 250)", (user_id, email))
         c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Welcome Bonus', 250)", (user_id,))
+        conn.commit()
+    elif email and not row[1]:
+        c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
         conn.commit()
     conn.close()
 
 
-# --- HELPER UTILITIES ---
+def wrap_affiliate_url(target_url):
+    """
+    Appends Ticketmaster / Impact partner parameters.
+    When registered on Ticketmaster's Impact network, clicks resolve with tracking.
+    """
+    if not target_url or target_url == "#":
+        return "#"
+    separator = "&" if "?" in target_url else "?"
+    return f"{target_url}{separator}camefrom=CFC_BUYAT_{AFFILIATE_PUB_ID}&subid1={AFFILIATE_PUB_ID}"
+
+
 def get_lat_long_from_zip(zip_code):
     zip_str = str(zip_code).strip()
     if not zip_str:
         return None
-
     if zip_str in ZIP_GEO_CACHE:
         return ZIP_GEO_CACHE[zip_str]
-
     try:
         res = requests.get(f"https://api.zippopotam.us/us/{zip_str}", timeout=4)
         if res.status_code == 200:
@@ -150,12 +159,11 @@ def get_lat_long_from_zip(zip_code):
             if places:
                 lat = places[0].get("latitude")
                 lon = places[0].get("longitude")
-                latlong_str = f"{lat},{lon}"
-                ZIP_GEO_CACHE[zip_str] = latlong_str
-                return latlong_str
+                coords = f"{lat},{lon}"
+                ZIP_GEO_CACHE[zip_str] = coords
+                return coords
     except Exception:
         pass
-
     return None
 
 
@@ -174,15 +182,15 @@ def categorize_genres(genre_list):
     return "Rock" if not text else "Other"
 
 
-# --- FLASK ROUTES ---
+# --- ROUTES ---
 @app.route("/")
 def home():
     sp = get_current_user_sp()
     if not sp:
         return redirect("/login")
 
-    user_id = get_user_id(sp)
-    ensure_user_wallet_seeded(user_id)
+    user_id, email = get_user_id_and_email(sp)
+    ensure_user_wallet_seeded(user_id, email)
 
     try:
         results = sp.current_user_top_artists(limit=30, time_range="medium_term")
@@ -210,15 +218,14 @@ def home():
         })
 
     sorted_categories = ["All"] + sorted([c for c in available_categories if c != "All"])
-    return render_template("index.html", artists=artists, categories=sorted_categories)
+    return render_template("index.html", artists=artists, categories=sorted_categories, user_email=email)
 
 
 @app.route("/login")
 def login():
     session.clear()
     sp_oauth = create_spotify_oauth()
-    auth_url = sp_oauth.get_authorize_url()
-    return redirect(auth_url)
+    return redirect(sp_oauth.get_authorize_url())
 
 
 @app.route("/callback")
@@ -241,21 +248,54 @@ def logout():
 def get_wallet():
     sp = get_current_user_sp()
     if not sp:
-        return jsonify({"points": 0, "history": []})
+        return jsonify({"points": 0, "email": "", "history": []})
 
-    user_id = get_user_id(sp)
-    ensure_user_wallet_seeded(user_id)
+    user_id, email = get_user_id_and_email(sp)
+    ensure_user_wallet_seeded(user_id, email)
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
+    c.execute("SELECT points, email FROM user_wallet WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     points = row[0] if row else 0
+    saved_email = row[1] if row and row[1] else email
 
     c.execute("SELECT action, points, created_at FROM points_history WHERE user_id = ? ORDER BY id DESC LIMIT 10", (user_id,))
     history = [{"action": h[0], "points": h[1], "date": h[2]} for h in c.fetchall()]
     conn.close()
-    return jsonify({"points": points, "history": history})
+    return jsonify({"points": points, "email": saved_email, "history": history})
+
+
+@app.route("/api/user/email", methods=["POST"])
+def save_user_email():
+    sp = get_current_user_sp()
+    if not sp:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    user_id, _ = get_user_id_and_email(sp)
+    data = request.json or {}
+    email = data.get("email", "").strip()
+
+    if not email or "@" not in email:
+        return jsonify({"success": False, "message": "Please enter a valid email."}), 400
+
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
+    
+    # Award 100 points for verifying/linking email if not already claimed
+    c.execute("SELECT id FROM points_history WHERE user_id = ? AND action LIKE '%Email Verified%'", (user_id,))
+    if not c.fetchone():
+        c.execute("UPDATE user_wallet SET points = points + 100 WHERE user_id = ?", (user_id,))
+        c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Email Verified Bonus', 100)", (user_id,))
+    conn.commit()
+
+    c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
+    new_balance = c.fetchone()[0]
+    conn.close()
+
+    session["spotify_email"] = email
+    return jsonify({"success": True, "new_balance": new_balance, "message": "Email saved! +100 Points added."})
 
 
 @app.route("/api/wallet/claim", methods=["POST"])
@@ -264,7 +304,7 @@ def claim_ticket_points():
     if not sp:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
-    user_id = get_user_id(sp)
+    user_id, _ = get_user_id_and_email(sp)
     ensure_user_wallet_seeded(user_id)
 
     data = request.json or {}
@@ -290,7 +330,7 @@ def redeem_perk():
     if not sp:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
-    user_id = get_user_id(sp)
+    user_id, _ = get_user_id_and_email(sp)
     ensure_user_wallet_seeded(user_id)
 
     data = request.json or {}
@@ -315,7 +355,7 @@ def redeem_perk():
     new_balance = c.fetchone()[0]
     conn.close()
 
-    return jsonify({"success": True, "new_balance": new_balance, "message": f"Unlocked {perk_name}!"})
+    return jsonify({"success": True, "new_balance": new_balance, "message": f"Unlocked {perk_name}! Reward code sent."})
 
 
 @app.route("/api/events")
@@ -354,12 +394,7 @@ def get_artist_events():
         return jsonify({"events": []})
 
     events_url = "https://app.ticketmaster.com/discovery/v2/events.json"
-    ev_params = {
-        "apikey": TM_API_KEY,
-        "attractionId": attraction_id,
-        "sort": "date,asc",
-        "size": 4
-    }
+    ev_params = {"apikey": TM_API_KEY, "attractionId": attraction_id, "sort": "date,asc", "size": 4}
 
     if latlong:
         ev_params["latlong"] = latlong
@@ -367,10 +402,7 @@ def get_artist_events():
         ev_params["unit"] = "miles"
     elif postal_code:
         coords = get_lat_long_from_zip(postal_code)
-        if coords:
-            ev_params["latlong"] = coords
-        else:
-            ev_params["postalCode"] = postal_code
+        ev_params["latlong" if coords else "postalCode"] = coords or postal_code
         ev_params["radius"] = radius
         ev_params["unit"] = "miles"
     else:
@@ -386,6 +418,7 @@ def get_artist_events():
                 venue_name = venues[0].get("name", "TBD") if venues else "TBD"
                 city = venues[0].get("city", {}).get("name", "") if venues else ""
                 state = venues[0].get("state", {}).get("stateCode", "") if venues else ""
+                raw_url = ev.get("url", "#")
 
                 events.append({
                     "id": ev.get("id"),
@@ -394,7 +427,7 @@ def get_artist_events():
                     "venue": venue_name,
                     "city": city,
                     "state": state,
-                    "url": ev.get("url", "#")
+                    "url": wrap_affiliate_url(raw_url)
                 })
     except Exception:
         pass
@@ -403,7 +436,6 @@ def get_artist_events():
     return jsonify({"events": events})
 
 
-# --- LOCATE ME: EXPLORE ALL NEARBY CONCERTS ---
 @app.route("/api/events/nearby")
 def get_nearby_events():
     latlong = request.args.get("latlong", "").strip()
@@ -424,10 +456,7 @@ def get_nearby_events():
         ev_params["unit"] = "miles"
     elif postal_code:
         coords = get_lat_long_from_zip(postal_code)
-        if coords:
-            ev_params["latlong"] = coords
-        else:
-            ev_params["postalCode"] = postal_code
+        ev_params["latlong" if coords else "postalCode"] = coords or postal_code
         ev_params["radius"] = radius
         ev_params["unit"] = "miles"
     else:
@@ -443,6 +472,7 @@ def get_nearby_events():
                 venue_name = venues[0].get("name", "TBD") if venues else "TBD"
                 city = venues[0].get("city", {}).get("name", "") if venues else ""
                 state = venues[0].get("state", {}).get("stateCode", "") if venues else ""
+                raw_url = ev.get("url", "#")
 
                 events.append({
                     "id": ev.get("id"),
@@ -451,7 +481,7 @@ def get_nearby_events():
                     "venue": venue_name,
                     "city": city,
                     "state": state,
-                    "url": ev.get("url", "#")
+                    "url": wrap_affiliate_url(raw_url)
                 })
     except Exception:
         pass
@@ -498,7 +528,7 @@ def scan_alerts():
     if not sp:
         return jsonify({"message": "Unauthorized", "new_alerts": []}), 401
 
-    user_id = get_user_id(sp)
+    user_id, _ = get_user_id_and_email(sp)
     data = request.json or {}
     tracked_artists = data.get("artists", [])
     postal_code = data.get("postal_code", "").strip()
@@ -523,12 +553,7 @@ def scan_alerts():
         att_id = attractions[0].get("id")
 
         ev_url = "https://app.ticketmaster.com/discovery/v2/events.json"
-        ev_params = {
-            "apikey": TM_API_KEY,
-            "attractionId": att_id,
-            "sort": "date,asc",
-            "size": 5
-        }
+        ev_params = {"apikey": TM_API_KEY, "attractionId": att_id, "sort": "date,asc", "size": 5}
 
         if coords:
             ev_params["latlong"] = coords
@@ -547,21 +572,20 @@ def scan_alerts():
         for ev in events:
             ev_id = f"{user_id}_{ev.get('id')}"
             c.execute("SELECT event_id FROM seen_events WHERE event_id = ?", (ev_id,))
-            exists = c.fetchone()
-
-            if not exists:
+            if not c.fetchone():
                 venues = ev.get("_embedded", {}).get("venues", [])
                 city = venues[0].get("city", {}).get("name", "") if venues else ""
                 state = venues[0].get("state", {}).get("stateCode", "") if venues else ""
                 venue_name = venues[0].get("name", "TBD") if venues else "TBD"
                 event_date = ev.get("dates", {}).get("start", {}).get("localDate", "TBD")
                 event_name = ev.get("name")
-                url = ev.get("url", "#")
+                raw_url = ev.get("url", "#")
+                aff_url = wrap_affiliate_url(raw_url)
 
                 c.execute("""
                     INSERT INTO seen_events (event_id, user_id, artist, event_name, event_date, city, state, url)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (ev_id, user_id, artist, event_name, event_date, city, state, url))
+                """, (ev_id, user_id, artist, event_name, event_date, city, state, aff_url))
                 conn.commit()
 
                 new_alerts.append({
@@ -571,7 +595,7 @@ def scan_alerts():
                     "city": city,
                     "state": state,
                     "venue": venue_name,
-                    "url": url
+                    "url": aff_url
                 })
 
     conn.close()
@@ -579,5 +603,4 @@ def scan_alerts():
 
 
 if __name__ == "__main__":
-    print("\n🚀 TicketPulse running at http://127.0.0.1:5000\n")
     app.run(host="0.0.0.0", port=5000, debug=True)
