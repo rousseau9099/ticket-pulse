@@ -14,7 +14,6 @@ CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET", "7c528522f7ec4d509bead004491c
 REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onrender.com/callback")
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
-# Impact / Ticketmaster Affiliate Params
 AFFILIATE_CAMPAIGN_ID = os.getenv("AFFILIATE_CAMPAIGN_ID", "4272")
 AFFILIATE_PUB_ID = os.getenv("AFFILIATE_PUB_ID", "ticketpulse")
 
@@ -152,7 +151,6 @@ def wrap_affiliate_url(target_url, user_id="guest"):
     if not target_url or target_url == "#":
         return "#"
     separator = "&" if "?" in target_url else "?"
-    # subid1 ties the exact TicketPulse user to the sale on Impact
     return f"{target_url}{separator}camefrom=CFC_BUYAT_{AFFILIATE_PUB_ID}&subid1={user_id}"
 
 
@@ -192,12 +190,72 @@ def categorize_genres(genre_list):
     return "Rock" if not text else "Other"
 
 
-# --- FLASK ROUTES ---
+# --- ROUTES ---
+
 @app.route("/")
 def home():
     sp = get_current_user_sp()
+    
+    # CRITICAL: If not logged in (e.g. Impact Verification Bot), serve HTML with the meta tag directly at "/"
     if not sp:
-        return redirect("/login")
+        sp_oauth = create_spotify_oauth()
+        auth_url = sp_oauth.get_authorize_url()
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name='impact-site-verification' value='9a3ee732-0041-47ec-a4cb-1249e556fa5b'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicketPulse - Live Concert Radar</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+    <style>
+        body {{
+            background: #0b0d10;
+            color: #f3f4f6;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+            padding: 1.5rem;
+        }}
+        .card {{
+            background: #14181f;
+            border: 1px solid #1f2530;
+            padding: 2.5rem 2rem;
+            border-radius: 18px;
+            max-width: 400px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }}
+        .logo {{ width: 68px; height: 68px; margin-bottom: 1rem; }}
+        h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; font-weight: 800; }}
+        h1 span {{ color: #ff2a85; }}
+        p {{ color: #94a3b8; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.75rem; }}
+        .btn {{
+            background: #1db954;
+            color: #000;
+            padding: 0.85rem 1.6rem;
+            border-radius: 999px;
+            font-weight: 700;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.1s ease;
+        }}
+        .btn:active {{ transform: scale(0.98); }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="/static/logo.svg" alt="TicketPulse Logo" class="logo">
+        <h1>Ticket<span>Pulse</span></h1>
+        <p>Live concert radar and exclusive fan rewards powered by your Spotify listening habits.</p>
+        <a href="{auth_url}" class="btn">Connect with Spotify</a>
+    </div>
+</body>
+</html>""", 200
 
     user_id, email = get_user_id_and_email(sp)
     ensure_user_wallet_seeded(user_id, email)
@@ -206,7 +264,7 @@ def home():
         results = sp.current_user_top_artists(limit=30, time_range="medium_term")
     except Exception:
         session.clear()
-        return redirect("/login")
+        return redirect("/")
 
     artists = []
     available_categories = set(["All"])
@@ -251,7 +309,7 @@ def callback():
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
+    return redirect("/")
 
 
 @app.route("/api/wallet", methods=["GET"])
@@ -293,7 +351,6 @@ def save_user_email():
     c = conn.cursor()
     c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
     
-    # 50 Points for verified email
     c.execute("SELECT id FROM points_history WHERE user_id = ? AND action LIKE '%Email Linked%'", (user_id,))
     if not c.fetchone():
         c.execute("UPDATE user_wallet SET points = points + 50 WHERE user_id = ?", (user_id,))
@@ -308,7 +365,6 @@ def save_user_email():
     return jsonify({"success": True, "new_balance": new_balance, "message": "Email saved! +50 Points added to your wallet."})
 
 
-# --- IMPACT PURCHASE WEBHOOK (Where points are actually generated) ---
 @app.route("/api/webhooks/impact", methods=["POST", "GET"])
 def impact_conversion_webhook():
     data = request.args if request.method == "GET" else (request.json or {})
@@ -322,7 +378,6 @@ def impact_conversion_webhook():
     if not user_id or user_id in ["guest", "guest_user"]:
         return jsonify({"status": "ignored", "reason": "No valid user_id"}), 200
 
-    # 1 Point awarded for every $1 spent on verified ticket orders
     points_to_award = max(int(sale_amount), 50)
 
     conn = sqlite3.connect(DB_FILE)
