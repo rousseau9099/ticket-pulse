@@ -69,6 +69,7 @@
       font-size: 0.75rem;
     }
 
+    /* Radar Box & Locate Me */
     .radar-box {
       background: #11151c;
       border: 1px solid #1f2838;
@@ -77,7 +78,7 @@
       margin-bottom: 1rem;
     }
     .radar-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; }
-    .radar-inputs { display: flex; gap: 0.5rem; }
+    .radar-inputs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .radar-input {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -87,6 +88,20 @@
       font-size: 0.85rem;
       outline: none;
       flex: 1;
+      min-width: 90px;
+    }
+    .btn-action {
+      background: #1f2838;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
     }
     .btn-apply {
       background: var(--accent);
@@ -97,6 +112,32 @@
       font-size: 0.85rem;
       font-weight: 700;
       cursor: pointer;
+    }
+
+    /* Toggle bar between Favorites & Discover All */
+    .feed-toggle {
+      display: flex;
+      background: #14181f;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 0.25rem;
+      margin-bottom: 1rem;
+      gap: 0.25rem;
+    }
+    .feed-toggle-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.45rem 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .feed-toggle-btn.active {
+      background: var(--accent);
+      color: #000;
     }
 
     .category-scroll {
@@ -196,6 +237,7 @@
     }
     .status-msg { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
 
+    /* Releases Cards */
     .release-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -226,6 +268,7 @@
     }
     .btn-listen:hover { background: var(--accent); color: #000; }
 
+    /* Account / Profile View */
     .profile-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -252,6 +295,7 @@
       color: #fff;
     }
 
+    /* Bottom Navigation */
     .mobile-bottom-bar {
       position: fixed;
       bottom: 0;
@@ -280,6 +324,7 @@
     .nav-tab.active { color: var(--accent); }
     .nav-icon { font-size: 1.2rem; }
 
+    /* Wallet Modal */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -321,9 +366,12 @@
     <!-- TAB 1: RADAR VIEW -->
     <div id="view-radar" class="tab-view active">
       <div class="radar-box">
-        <div class="radar-title">📍 Live Tour Radar</div>
+        <div class="radar-title">📍 Live Concert Radar</div>
         <div class="radar-inputs">
           <input type="text" id="radar-zip" class="radar-input" placeholder="Zip Code" style="max-width: 110px;">
+          <button class="btn-action" onclick="locateMe()" title="Use GPS Location">
+            <span>📍</span> <span id="locate-btn-text">Locate Me</span>
+          </button>
           <select id="radar-radius" class="radar-input">
             <option value="50">50 miles</option>
             <option value="100">100 miles</option>
@@ -334,13 +382,20 @@
         </div>
       </div>
 
-      <div class="category-scroll">
+      <div class="feed-toggle">
+        <button class="feed-toggle-btn active" id="btn-mode-artists" onclick="switchRadarMode('artists')">My Top Artists</button>
+        <button class="feed-toggle-btn" id="btn-mode-nearby" onclick="switchRadarMode('nearby')">Explore All Nearby Shows</button>
+      </div>
+
+      <!-- Categories for Spotify Artists -->
+      <div id="category-bar" class="category-scroll">
         {% for cat in categories %}
           <button class="pill {% if cat == 'All' %}active{% endif %}" onclick="filterCategory('{{ cat }}')">{{ cat }}</button>
         {% endfor %}
       </div>
 
-      <div class="artist-feed">
+      <!-- Mode 1: Spotify Artist Feed -->
+      <div id="feed-artists" class="artist-feed">
         {% for artist in artists %}
           <div class="artist-card" data-category="{{ artist.category }}">
             <div class="artist-header">
@@ -363,9 +418,15 @@
           </div>
         {% endfor %}
       </div>
+
+      <!-- Mode 2: All Nearby Live Shows Feed -->
+      <div id="feed-nearby" class="artist-feed" style="display: none;">
+        <div class="status-msg" id="nearby-status">Tap "Locate Me" or enter a zip code to scan all live music nearby.</div>
+        <div id="nearby-events-container" class="events-box"></div>
+      </div>
     </div>
 
-    <!-- TAB 2: RELEASES & NEWS VIEW -->
+    <!-- TAB 2: RELEASES VIEW -->
     <div id="view-drops" class="tab-view">
       <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">🔥 New Albums & Singles</div>
       <div id="releases-feed">
@@ -373,14 +434,14 @@
       </div>
     </div>
 
-    <!-- TAB 3: ACCOUNT & LOGOUT VIEW -->
+    <!-- TAB 3: ACCOUNT VIEW -->
     <div id="view-account" class="tab-view">
       <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">👤 Account & Session</div>
       <div class="profile-card">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎧</div>
         <h3 style="margin-bottom: 0.5rem;">Spotify Connected</h3>
         <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
-          You are currently viewing personalized concert radar dates based on the active Spotify account session.
+          Your personal artist radar and wallet points are isolated to this device's session.
         </p>
         <a href="/logout" class="btn-logout" onclick="clearLocalClientStorage()">
           🚪 Log Out / Switch Spotify Account
@@ -436,6 +497,8 @@
   </div>
 
   <script>
+    let currentCoords = localStorage.getItem('radar_coords') || '';
+
     function switchView(tab) {
       document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
@@ -453,8 +516,99 @@
       }
     }
 
+    function switchRadarMode(mode) {
+      const isArtists = mode === 'artists';
+      document.getElementById('btn-mode-artists').classList.toggle('active', isArtists);
+      document.getElementById('btn-mode-nearby').classList.toggle('active', !isArtists);
+      document.getElementById('category-bar').style.display = isArtists ? 'flex' : 'none';
+      document.getElementById('feed-artists').style.display = isArtists ? 'flex' : 'none';
+      document.getElementById('feed-nearby').style.display = !isArtists ? 'block' : 'none';
+
+      if (!isArtists) {
+        fetchNearbyShows();
+      }
+    }
+
+    function locateMe() {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        return;
+      }
+
+      const btnText = document.getElementById('locate-btn-text');
+      btnText.innerText = 'Locating...';
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude.toFixed(4);
+          const lon = position.coords.longitude.toFixed(4);
+          currentCoords = `${lat},${lon}`;
+          localStorage.setItem('radar_coords', currentCoords);
+
+          document.getElementById('radar-zip').value = '';
+          localStorage.removeItem('radar_zip');
+          btnText.innerText = '📍 GPS Set';
+
+          if (document.getElementById('btn-mode-nearby').classList.contains('active')) {
+            fetchNearbyShows();
+          } else {
+            fetchAllArtistEvents();
+          }
+        },
+        (error) => {
+          btnText.innerText = 'Locate Me';
+          alert('Could not retrieve location. Please check browser GPS permissions.');
+        },
+        { timeout: 10000, enableHighAccuracy: false }
+      );
+    }
+
+    function fetchNearbyShows() {
+      const zip = document.getElementById('radar-zip').value.trim();
+      const radius = document.getElementById('radar-radius').value;
+      const status = document.getElementById('nearby-status');
+      const container = document.getElementById('nearby-events-container');
+
+      status.innerText = 'Scanning all live music nearby...';
+      container.innerHTML = '';
+
+      let query = `/api/events/nearby?radius=${radius}`;
+      if (currentCoords) {
+        query += `&latlong=${encodeURIComponent(currentCoords)}`;
+      } else if (zip) {
+        query += `&postal_code=${encodeURIComponent(zip)}`;
+      } else {
+        status.innerText = 'Tap "Locate Me" or enter a zip code to scan shows.';
+        return;
+      }
+
+      fetch(query)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.events || data.events.length === 0) {
+            status.innerText = `No live concerts found within ${radius} miles.`;
+            return;
+          }
+          status.innerText = `Found ${data.events.length} upcoming shows nearby:`;
+          container.innerHTML = data.events.map(ev => `
+            <div class="event-chip">
+              <div>
+                <div class="event-date">📅 ${ev.date}</div>
+                <div class="event-title">${ev.name}</div>
+                <div class="event-venue">📍 ${ev.venue} (${ev.city}, ${ev.state})</div>
+              </div>
+              <button onclick="handleTicketClick('${ev.url}', '${ev.name.replace(/'/g, "\\'")}')" class="btn-ticket">+50 Pts</button>
+            </div>
+          `).join('');
+        })
+        .catch(() => {
+          status.innerText = 'Error loading nearby concerts.';
+        });
+    }
+
     function clearLocalClientStorage() {
       localStorage.removeItem('tracked_artists');
+      localStorage.removeItem('radar_coords');
     }
 
     let releasesLoaded = false;
@@ -534,10 +688,17 @@
       const zip = document.getElementById('radar-zip').value.trim();
       const radius = document.getElementById('radar-radius').value;
 
-      document.querySelectorAll('.events-box').forEach((box, idx) => {
+      document.querySelectorAll('#feed-artists .events-box').forEach((box, idx) => {
         const artist = box.getAttribute('data-artist');
         setTimeout(() => {
-          fetch(`/api/events?artist=${encodeURIComponent(artist)}&postal_code=${zip}&radius=${radius}`)
+          let url = `/api/events?artist=${encodeURIComponent(artist)}&radius=${radius}`;
+          if (currentCoords) {
+            url += `&latlong=${encodeURIComponent(currentCoords)}`;
+          } else if (zip) {
+            url += `&postal_code=${encodeURIComponent(zip)}`;
+          }
+
+          fetch(url)
             .then(r => r.json())
             .then(data => {
               if (!data.events || data.events.length === 0) {
@@ -561,9 +722,20 @@
     }
 
     function applyRadarSettings() {
-      localStorage.setItem('radar_zip', document.getElementById('radar-zip').value.trim());
+      const zip = document.getElementById('radar-zip').value.trim();
+      if (zip) {
+        currentCoords = '';
+        localStorage.removeItem('radar_coords');
+        localStorage.setItem('radar_zip', zip);
+        document.getElementById('locate-btn-text').innerText = 'Locate Me';
+      }
       localStorage.setItem('radar_radius', document.getElementById('radar-radius').value);
-      fetchAllArtistEvents();
+
+      if (document.getElementById('btn-mode-nearby').classList.contains('active')) {
+        fetchNearbyShows();
+      } else {
+        fetchAllArtistEvents();
+      }
     }
 
     function filterCategory(cat) {
@@ -591,7 +763,6 @@
     function triggerAlertScan() {
       const zip = document.getElementById('radar-zip').value.trim();
       const radius = document.getElementById('radar-radius').value;
-      if (!zip) return alert('Enter a zip code first.');
       if (!trackedArtists.length) return alert('Track at least one artist first.');
 
       fetch('/api/scan-alerts', {
@@ -609,6 +780,9 @@
       refreshWallet();
       document.getElementById('radar-zip').value = localStorage.getItem('radar_zip') || '';
       document.getElementById('radar-radius').value = localStorage.getItem('radar_radius') || '150';
+      if (currentCoords) {
+        document.getElementById('locate-btn-text').innerText = '📍 GPS Set';
+      }
       
       document.querySelectorAll('.artist-card').forEach(c => {
         const n = c.querySelector('.artist-name').innerText;
