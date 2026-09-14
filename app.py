@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 import requests
 import spotipy
-from spotipy.cache_handler import FlaskSessionCacheHandler
 from spotipy.oauth2 import SpotifyOAuth
 
 # --- LOAD ENVIRONMENT VARIABLES ---
@@ -16,14 +15,15 @@ REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onren
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-secret-session-key-v2-secure")
+# Changing the session secret forces all old browser sessions to expire immediately
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-v3-isolated-session-98214")
 
 EVENT_CACHE = {}
 ZIP_GEO_CACHE = {}
 DB_FILE = "alerts.db"
 
 
-# --- DATABASE INITIALIZATION ---
+# --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -66,27 +66,34 @@ def init_db():
 init_db()
 
 
-# --- SPOTIFY PER-USER SESSION AUTH ---
-def get_auth_manager():
-    # Store token strictly inside user's browser session cookie
-    cache_handler = FlaskSessionCacheHandler(session)
+# --- SPOTIFY AUTH UTILITY ---
+def create_spotify_oauth():
     return SpotifyOAuth(
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
         scope="user-top-read",
-        cache_handler=cache_handler,
-        cache_path=None,   # Explicitly disable reading or writing any .cache file on disk
-        show_dialog=True   # Always prompt login so users do not auto-inherit browser sessions
+        cache_path=None,   # Never look for or create a file on disk
+        show_dialog=True   # Force Spotify to ask who is logging in
     )
 
 
 def get_current_user_sp():
-    auth_manager = get_auth_manager()
-    token = auth_manager.cache_handler.get_access_token()
-    if not token or not auth_manager.validate_token(token):
-        return None, auth_manager
-    return spotipy.Spotify(auth_manager=auth_manager), auth_manager
+    token_info = session.get("token_info", None)
+    if not token_info:
+        return None
+
+    sp_oauth = create_spotify_oauth()
+    # Check if access token is expired and refresh if necessary
+    if sp_oauth.is_token_expired(token_info):
+        try:
+            token_info = sp_oauth.refresh_access_token(token_info["refresh_token"])
+            session["token_info"] = token_info
+        except Exception:
+            session.clear()
+            return None
+
+    return spotipy.Spotify(auth=token_info["access_token"])
 
 
 def get_user_id(sp):
@@ -98,7 +105,7 @@ def get_user_id(sp):
         session["spotify_user_id"] = uid
         return uid
     except Exception:
-        return "anonymous_user"
+        return "guest_user"
 
 
 def ensure_user_wallet_seeded(user_id):
@@ -112,7 +119,7 @@ def ensure_user_wallet_seeded(user_id):
     conn.close()
 
 
-# --- LOCATION & GENRE UTILITIES ---
+# --- HELPER UTILITIES ---
 def get_lat_long_from_zip(zip_code):
     zip_str = str(zip_code).strip()
     if not zip_str:
@@ -152,10 +159,10 @@ def categorize_genres(genre_list):
     return "Rock" if not text else "Other"
 
 
-# --- APPLICATION ROUTES ---
+# --- FLASK ROUTES ---
 @app.route("/")
 def home():
-    sp, auth_manager = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return redirect("/login")
 
@@ -193,16 +200,19 @@ def home():
 
 @app.route("/login")
 def login():
-    auth_manager = get_auth_manager()
-    return redirect(auth_manager.get_authorize_url())
+    session.clear()
+    sp_oauth = create_spotify_oauth()
+    auth_url = sp_oauth.get_authorize_url()
+    return redirect(auth_url)
 
 
 @app.route("/callback")
 def callback():
-    auth_manager = get_auth_manager()
+    sp_oauth = create_spotify_oauth()
+    session.clear()
     code = request.args.get("code")
-    if code:
-        auth_manager.get_access_token(code)
+    token_info = sp_oauth.get_access_token(code, check_cache=False)
+    session["token_info"] = token_info
     return redirect("/")
 
 
@@ -214,7 +224,7 @@ def logout():
 
 @app.route("/api/wallet", methods=["GET"])
 def get_wallet():
-    sp, _ = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return jsonify({"points": 0, "history": []})
 
@@ -235,7 +245,7 @@ def get_wallet():
 
 @app.route("/api/wallet/claim", methods=["POST"])
 def claim_ticket_points():
-    sp, _ = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
@@ -261,7 +271,7 @@ def claim_ticket_points():
 
 @app.route("/api/wallet/redeem", methods=["POST"])
 def redeem_perk():
-    sp, _ = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
 
@@ -377,7 +387,7 @@ def get_artist_events():
 
 @app.route("/api/releases")
 def get_releases():
-    sp, _ = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return jsonify({"releases": []})
 
@@ -410,7 +420,7 @@ def get_releases():
 
 @app.route("/api/scan-alerts", methods=["POST"])
 def scan_alerts():
-    sp, _ = get_current_user_sp()
+    sp = get_current_user_sp()
     if not sp:
         return jsonify({"message": "Unauthorized", "new_alerts": []}), 401
 
@@ -497,3 +507,4 @@ def scan_alerts():
 if __name__ == "__main__":
     print("\n🚀 TicketPulse running at http://127.0.0.1:5000\n")
     app.run(host="0.0.0.0", port=5000, debug=True)
+    
