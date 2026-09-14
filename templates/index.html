@@ -52,8 +52,8 @@
       gap: 0.6rem;
     }
     .brand-logo {
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       border-radius: 8px;
     }
     h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
@@ -231,6 +231,8 @@
       font-weight: 700;
       white-space: nowrap;
       cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
     }
     .status-msg { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
 
@@ -340,6 +342,16 @@
       padding: 0.85rem;
       margin-bottom: 1rem;
     }
+    .earning-explainer {
+      background: #0d1117;
+      border: 1px solid #1a2230;
+      border-radius: 8px;
+      padding: 0.6rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -352,7 +364,7 @@
       <div class="header-actions">
         <div class="loyalty-widget" onclick="openLocker()">
           <span id="points-display" style="font-size: 0.9rem; font-weight: 800; color: var(--point);">... PTS</span>
-          <span class="points-badge">+50</span>
+          <span class="points-badge">Wallet</span>
         </div>
       </div>
     </header>
@@ -433,7 +445,7 @@
         <h3 style="margin-bottom: 0.25rem;">Spotify Connected</h3>
         <p id="profile-email" style="color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem;">Syncing email...</p>
         <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
-          Tickets clicked through TicketPulse links earn 50 PTS and count toward merch codes and perks.
+          Earn 1 Point per $1 spent on official tickets through TicketPulse links. Points post when orders confirm.
         </p>
         <a href="/logout" class="btn-logout" onclick="clearLocalClientStorage()">
           🚪 Log Out / Switch Spotify Account
@@ -469,40 +481,44 @@
   <!-- Wallet Modal -->
   <div class="modal-overlay" id="locker-modal">
     <div class="modal">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
         <h2 style="font-size: 1.2rem;">Pulse Wallet</h2>
         <button onclick="closeLocker()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
       </div>
 
       <!-- Email Capture Banner -->
       <div class="email-banner" id="email-verify-box">
-        <div style="font-size:0.8rem; font-weight:800; color:var(--point); margin-bottom:0.25rem;">⚡ VERIFY EMAIL (+100 PTS)</div>
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">Link your email to unlock reward promo codes and ticket presale alerts.</div>
+        <div style="font-size:0.8rem; font-weight:800; color:var(--point); margin-bottom:0.25rem;">⚡ LINK EMAIL (+50 PTS)</div>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">Save your wallet balance across devices and receive presale alerts.</div>
         <div style="display:flex; gap:0.4rem;">
           <input type="email" id="wallet-email-input" placeholder="Your Email Address" style="flex:1; background:#0b0d10; border:1px solid #2d3748; color:#fff; padding:0.4rem 0.6rem; border-radius:6px; font-size:0.8rem;">
           <button onclick="submitEmail()" style="background:var(--point); color:#000; border:none; font-weight:700; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.8rem; cursor:pointer;">Claim</button>
         </div>
       </div>
 
-      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">PERKS</div>
+      <div class="earning-explainer">
+        💡 <strong>How to Earn:</strong> Get <strong>1 PT per $1 spent</strong> on verified ticket purchases through TicketPulse links. Points post automatically once Ticketmaster approves the order.
+      </div>
+
+      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">REWARDS & PERKS</div>
       <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
         <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:0.85rem; font-weight:600;">$10 Merch Credit</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">Digital promo code</div>
+            <div style="font-size:0.85rem; font-weight:600;">Monthly $50 Ticket Cash</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">1 Entry into this month's drawing</div>
           </div>
-          <button onclick="redeem(150, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">150 PTS</button>
+          <button onclick="redeem(50, 'Monthly $50 Drawing Entry')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">50 PTS</button>
         </div>
         <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:0.85rem; font-weight:600;">VIP Early Entry Pass</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">Venue Fast-Track code</div>
+            <div style="font-size:0.85rem; font-weight:600;">$10 Official Merch Credit</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Digital promo code</div>
           </div>
-          <button onclick="redeem(350, 'VIP Early Entry Pass')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">350 PTS</button>
+          <button onclick="redeem(1000, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">1,000 PTS</button>
         </div>
       </div>
 
-      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">POINTS ACTIVITY</div>
+      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">ACTIVITY HISTORY</div>
       <div id="history-box" style="background:#0a0c10; padding:0.5rem; border-radius:8px; font-size:0.75rem; max-height:140px; overflow-y:auto;"></div>
     </div>
   </div>
@@ -598,24 +614,11 @@
                 <div class="event-title">${ev.name}</div>
                 <div class="event-venue">📍 ${ev.venue} (${ev.city}, ${ev.state})</div>
               </div>
-              <button onclick="handleTicketClick('${ev.url}', '${ev.name.replace(/'/g, "\\'")}')" class="btn-ticket">+50 Pts</button>
+              <a href="${ev.url}" target="_blank" class="btn-ticket">Tickets 🎟️</a>
             </div>
           `).join('');
         })
         .catch(() => { status.innerText = 'Error loading nearby concerts.'; });
-    }
-
-    function handleTicketClick(url, eventName) {
-      fetch('/api/wallet/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_name: eventName })
-      })
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('points-display').innerText = `${d.new_balance} PTS`;
-      });
-      window.open(url, '_blank');
     }
 
     function refreshWallet() {
@@ -724,7 +727,7 @@
                     <div class="event-title">${ev.name}</div>
                     <div class="event-venue">📍 ${ev.venue} (${ev.city}, ${ev.state})</div>
                   </div>
-                  <button onclick="handleTicketClick('${ev.url}', '${ev.name.replace(/'/g, "\\'")}')" class="btn-ticket">+50 Pts</button>
+                  <a href="${ev.url}" target="_blank" class="btn-ticket">Tickets 🎟️</a>
                 </div>
               `).join('');
             })

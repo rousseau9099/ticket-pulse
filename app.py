@@ -14,7 +14,7 @@ CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET", "7c528522f7ec4d509bead004491c
 REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "https://ticketpulse-4gii.onrender.com/callback")
 TM_API_KEY = os.getenv("TM_API_KEY", "eVZk4A8RXeyobjYUhY7x4MeEJ9Ofb1Lo")
 
-# Affiliate tracking parameters (Impact / Ticketmaster)
+# Impact / Ticketmaster Affiliate Params
 AFFILIATE_CAMPAIGN_ID = os.getenv("AFFILIATE_CAMPAIGN_ID", "4272")
 AFFILIATE_PUB_ID = os.getenv("AFFILIATE_PUB_ID", "ticketpulse")
 
@@ -48,7 +48,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS user_wallet (
             user_id TEXT PRIMARY KEY,
             email TEXT,
-            points INTEGER DEFAULT 250
+            points INTEGER DEFAULT 25
         )
     """)
 
@@ -64,21 +64,21 @@ def init_db():
 
     # Schema migration checks
     c.execute("PRAGMA table_info(user_wallet)")
-    columns = [col[1] for col in c.fetchall()]
-    if "user_id" not in columns:
+    wallet_cols = [col[1] for col in c.fetchall()]
+    if "user_id" not in wallet_cols:
         try:
             c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
         except sqlite3.OperationalError:
             pass
-    if "email" not in columns:
+    if "email" not in wallet_cols:
         try:
             c.execute("ALTER TABLE user_wallet ADD COLUMN email TEXT")
         except sqlite3.OperationalError:
             pass
 
     c.execute("PRAGMA table_info(points_history)")
-    columns = [col[1] for col in c.fetchall()]
-    if "user_id" not in columns:
+    history_cols = [col[1] for col in c.fetchall()]
+    if "user_id" not in history_cols:
         try:
             c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
         except sqlite3.OperationalError:
@@ -139,8 +139,8 @@ def ensure_user_wallet_seeded(user_id, email=""):
     c.execute("SELECT points, email FROM user_wallet WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     if not row:
-        c.execute("INSERT OR REPLACE INTO user_wallet (user_id, email, points) VALUES (?, ?, 250)", (user_id, email))
-        c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Welcome Bonus', 250)", (user_id,))
+        c.execute("INSERT OR REPLACE INTO user_wallet (user_id, email, points) VALUES (?, ?, 25)", (user_id, email))
+        c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Welcome Bonus', 25)", (user_id,))
         conn.commit()
     elif email and not row[1]:
         c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
@@ -148,11 +148,12 @@ def ensure_user_wallet_seeded(user_id, email=""):
     conn.close()
 
 
-def wrap_affiliate_url(target_url):
+def wrap_affiliate_url(target_url, user_id="guest"):
     if not target_url or target_url == "#":
         return "#"
     separator = "&" if "?" in target_url else "?"
-    return f"{target_url}{separator}camefrom=CFC_BUYAT_{AFFILIATE_PUB_ID}&subid1={AFFILIATE_PUB_ID}"
+    # subid1 ties the exact TicketPulse user to the sale on Impact
+    return f"{target_url}{separator}camefrom=CFC_BUYAT_{AFFILIATE_PUB_ID}&subid1={user_id}"
 
 
 def get_lat_long_from_zip(zip_code):
@@ -292,10 +293,11 @@ def save_user_email():
     c = conn.cursor()
     c.execute("UPDATE user_wallet SET email = ? WHERE user_id = ?", (email, user_id))
     
-    c.execute("SELECT id FROM points_history WHERE user_id = ? AND action LIKE '%Email Verified%'", (user_id,))
+    # 50 Points for verified email
+    c.execute("SELECT id FROM points_history WHERE user_id = ? AND action LIKE '%Email Linked%'", (user_id,))
     if not c.fetchone():
-        c.execute("UPDATE user_wallet SET points = points + 100 WHERE user_id = ?", (user_id,))
-        c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Email Verified Bonus', 100)", (user_id,))
+        c.execute("UPDATE user_wallet SET points = points + 50 WHERE user_id = ?", (user_id,))
+        c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, 'Email Linked Bonus', 50)", (user_id,))
     conn.commit()
 
     c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
@@ -303,33 +305,37 @@ def save_user_email():
     conn.close()
 
     session["spotify_email"] = email
-    return jsonify({"success": True, "new_balance": new_balance, "message": "Email saved! +100 Points added."})
+    return jsonify({"success": True, "new_balance": new_balance, "message": "Email saved! +50 Points added to your wallet."})
 
 
-@app.route("/api/wallet/claim", methods=["POST"])
-def claim_ticket_points():
-    sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
+# --- IMPACT PURCHASE WEBHOOK (Where points are actually generated) ---
+@app.route("/api/webhooks/impact", methods=["POST", "GET"])
+def impact_conversion_webhook():
+    data = request.args if request.method == "GET" else (request.json or {})
 
-    user_id, _ = get_user_id_and_email(sp)
-    ensure_user_wallet_seeded(user_id)
+    user_id = data.get("subid1")
+    try:
+        sale_amount = float(data.get("amount", 0.0))
+    except (ValueError, TypeError):
+        sale_amount = 0.0
 
-    data = request.json or {}
-    event_name = data.get("event_name", "Concert Ticket")
-    award = 50
+    if not user_id or user_id in ["guest", "guest_user"]:
+        return jsonify({"status": "ignored", "reason": "No valid user_id"}), 200
+
+    # 1 Point awarded for every $1 spent on verified ticket orders
+    points_to_award = max(int(sale_amount), 50)
 
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("UPDATE user_wallet SET points = points + ? WHERE user_id = ?", (award, user_id))
-    c.execute("INSERT INTO points_history (user_id, action, points) VALUES (?, ?, ?)", (user_id, f"Ticket Click: {event_name[:35]}", award))
+    c.execute("UPDATE user_wallet SET points = points + ? WHERE user_id = ?", (points_to_award, user_id))
+    c.execute("""
+        INSERT INTO points_history (user_id, action, points)
+        VALUES (?, ?, ?)
+    """, (user_id, f"Verified Ticket Purchase (${sale_amount:.2f})", points_to_award))
     conn.commit()
-
-    c.execute("SELECT points FROM user_wallet WHERE user_id = ?", (user_id,))
-    new_balance = c.fetchone()[0]
     conn.close()
 
-    return jsonify({"success": True, "new_balance": new_balance, "awarded": award})
+    return jsonify({"status": "success", "awarded": points_to_award, "user_id": user_id}), 200
 
 
 @app.route("/api/wallet/redeem", methods=["POST"])
@@ -363,11 +369,16 @@ def redeem_perk():
     new_balance = c.fetchone()[0]
     conn.close()
 
-    return jsonify({"success": True, "new_balance": new_balance, "message": f"Unlocked {perk_name}! Reward code sent."})
+    return jsonify({"success": True, "new_balance": new_balance, "message": f"Claimed {perk_name}! Instructions sent to your email."})
 
 
 @app.route("/api/events")
 def get_artist_events():
+    sp = get_current_user_sp()
+    user_id = "guest"
+    if sp:
+        user_id, _ = get_user_id_and_email(sp)
+
     artist_name = request.args.get("artist", "").strip()
     postal_code = request.args.get("postal_code", "").strip()
     latlong = request.args.get("latlong", "").strip()
@@ -435,7 +446,7 @@ def get_artist_events():
                     "venue": venue_name,
                     "city": city,
                     "state": state,
-                    "url": wrap_affiliate_url(raw_url)
+                    "url": wrap_affiliate_url(raw_url, user_id)
                 })
     except Exception:
         pass
@@ -446,6 +457,11 @@ def get_artist_events():
 
 @app.route("/api/events/nearby")
 def get_nearby_events():
+    sp = get_current_user_sp()
+    user_id = "guest"
+    if sp:
+        user_id, _ = get_user_id_and_email(sp)
+
     latlong = request.args.get("latlong", "").strip()
     postal_code = request.args.get("postal_code", "").strip()
     radius = request.args.get("radius", "50").strip()
@@ -489,7 +505,7 @@ def get_nearby_events():
                     "venue": venue_name,
                     "city": city,
                     "state": state,
-                    "url": wrap_affiliate_url(raw_url)
+                    "url": wrap_affiliate_url(raw_url, user_id)
                 })
     except Exception:
         pass
@@ -588,7 +604,7 @@ def scan_alerts():
                 event_date = ev.get("dates", {}).get("start", {}).get("localDate", "TBD")
                 event_name = ev.get("name")
                 raw_url = ev.get("url", "#")
-                aff_url = wrap_affiliate_url(raw_url)
+                aff_url = wrap_affiliate_url(raw_url, user_id)
 
                 c.execute("""
                     INSERT INTO seen_events (event_id, user_id, artist, event_name, event_date, city, state, url)
