@@ -9,6 +9,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0d10">
   
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/concert.png">
+  
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -31,7 +34,6 @@
     }
     .container { max-width: 720px; margin: 0 auto; }
     
-    /* Top Bar */
     header {
       display: flex;
       justify-content: space-between;
@@ -67,7 +69,6 @@
       font-size: 0.75rem;
     }
 
-    /* Radar Controls */
     .radar-box {
       background: #11151c;
       border: 1px solid #1f2838;
@@ -98,7 +99,6 @@
       cursor: pointer;
     }
 
-    /* Categories */
     .category-scroll {
       display: flex;
       gap: 0.4rem;
@@ -125,11 +125,9 @@
       border-color: var(--accent);
     }
 
-    /* Views */
     .tab-view { display: none; }
     .tab-view.active { display: block; }
 
-    /* Feed Items */
     .artist-feed { display: flex; flex-direction: column; gap: 1rem; }
     .artist-card {
       background: var(--card-bg);
@@ -198,7 +196,6 @@
     }
     .status-msg { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
 
-    /* Releases Cards */
     .release-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -229,7 +226,6 @@
     }
     .btn-listen:hover { background: var(--accent); color: #000; }
 
-    /* Profile / Settings View */
     .profile-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
@@ -256,7 +252,6 @@
       color: #fff;
     }
 
-    /* Bottom Navigation */
     .mobile-bottom-bar {
       position: fixed;
       bottom: 0;
@@ -285,7 +280,6 @@
     .nav-tab.active { color: var(--accent); }
     .nav-icon { font-size: 1.2rem; }
 
-    /* Modal */
     .modal-overlay {
       display: none;
       position: fixed;
