@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TicketPulse</title>
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b0d10">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0d10;
+      --card-bg: #14181f;
+      --card-border: #1f2530;
+      --accent: #1db954;
+      --accent-hover: #1aa34a;
+      --point: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 1rem 1rem 5.5rem 1rem;
+    }
+    .container { max-width: 720px; margin: 0 auto; }
+    
+    /* Top Bar */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px; }
+    h1 span { color: var(--accent); }
+    
+    .loyalty-widget {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 0.4rem 0.8rem;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+    .points-badge {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--point);
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    /* Radar Controls */
+    .radar-box {
+      background: #11151c;
+      border: 1px solid #1f2838;
+      border-radius: 12px;
+      padding: 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .radar-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; }
+    .radar-inputs { display: flex; gap: 0.5rem; }
+    .radar-input {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 0.5rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      outline: none;
+      flex: 1;
+    }
+    .btn-apply {
+      background: var(--accent);
+      border: none;
+      color: #000;
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Categories */
+    .category-scroll {
+      display: flex;
+      gap: 0.4rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      margin-bottom: 1rem;
+      scrollbar-width: none;
+    }
+    .category-scroll::-webkit-scrollbar { display: none; }
+    .pill {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .pill.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    /* Views */
+    .tab-view { display: none; }
+    .tab-view.active { display: block; }
+
+    /* Feed Items */
+    .artist-feed { display: flex; flex-direction: column; gap: 1rem; }
+    .artist-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1rem;
+    }
+    .artist-card.hidden { display: none; }
+    .artist-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .artist-left { display: flex; align-items: center; gap: 0.75rem; }
+    .artist-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--card-border);
+    }
+    .artist-name { font-size: 1.1rem; font-weight: 700; }
+    .artist-genre { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; font-weight: 700; }
+
+    .btn-track {
+      background: #1c222b;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-track.tracking {
+      background: rgba(29, 185, 84, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .events-box { display: flex; flex-direction: column; gap: 0.6rem; }
+    .event-chip {
+      background: #0d1015;
+      border: 1px solid #1a202c;
+      border-radius: 10px;
+      padding: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .event-date { color: var(--accent); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+    .event-title { font-size: 0.85rem; font-weight: 600; margin: 0.15rem 0; }
+    .event-venue { font-size: 0.75rem; color: var(--text-muted); }
+    .btn-ticket {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .status-msg { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+
+    /* Releases Cards */
+    .release-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .release-art {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .btn-listen {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-decoration: none;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .btn-listen:hover { background: var(--accent); color: #000; }
+
+    /* Bottom Navigation */
+    .mobile-bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(14, 17, 23, 0.95);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-around;
+      padding: 0.6rem 0;
+      z-index: 999;
+    }
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .nav-tab.active { color: var(--accent); }
+    .nav-icon { font-size: 1.2rem; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #141820;
+      border: 1px solid #232a38;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 480px;
+      padding: 1.25rem;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Ticket<span>Pulse</span></h1>
+      </div>
+      <div class="loyalty-widget" onclick="openLocker()">
+        <span id="points-display" style="font-size: 0.9rem; font-weight: 800; color: var(--point);">... PTS</span>
+        <span class="points-badge">+50</span>
+      </div>
+    </header>
+
+    <!-- TAB 1: RADAR VIEW -->
+    <div id="view-radar" class="tab-view active">
+      <div class="radar-box">
+        <div class="radar-title">📍 Live Tour Radar</div>
+        <div class="radar-inputs">
+          <input type="text" id="radar-zip" class="radar-input" placeholder="Zip Code" style="max-width: 110px;">
+          <select id="radar-radius" class="radar-input">
+            <option value="50">50 miles</option>
+            <option value="100">100 miles</option>
+            <option value="150" selected>150 miles</option>
+            <option value="250">250 miles</option>
+          </select>
+          <button class="btn-apply" onclick="applyRadarSettings()">Scan</button>
+        </div>
+      </div>
+
+      <div class="category-scroll">
+        {% for cat in categories %}
+          <button class="pill {% if cat == 'All' %}active{% endif %}" onclick="filterCategory('{{ cat }}')">{{ cat }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="artist-feed">
+        {% for artist in artists %}
+          <div class="artist-card" data-category="{{ artist.category }}">
+            <div class="artist-header">
+              <div class="artist-left">
+                {% if artist.image %}
+                  <img src="{{ artist.image }}" alt="{{ artist.name }}" class="artist-avatar">
+                {% endif %}
+                <div>
+                  <div class="artist-name">{{ artist.name }}</div>
+                  <div class="artist-genre">{{ artist.category }}</div>
+                </div>
+              </div>
+              <button class="btn-track" onclick="toggleTrack(this, '{{ artist.name }}')">
+                🔔 <span>Track</span>
+              </button>
+            </div>
+            <div class="events-box" id="events-{{ loop.index }}" data-artist="{{ artist.name }}">
+              <div class="status-msg">Scanning tour dates...</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- TAB 2: RELEASES & NEWS VIEW -->
+    <div id="view-drops" class="tab-view">
+      <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">🔥 New Albums & Singles</div>
+      <div id="releases-feed">
+        <div class="status-msg">Fetching latest drops from Spotify...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Navigation -->
+  <div class="mobile-bottom-bar">
+    <button class="nav-tab active" id="tab-btn-radar" onclick="switchView('radar')">
+      <span class="nav-icon">📡</span>
+      <span>Radar</span>
+    </button>
+    <button class="nav-tab" id="tab-btn-drops" onclick="switchView('drops')">
+      <span class="nav-icon">💿</span>
+      <span>Drops</span>
+    </button>
+    <button class="nav-tab" onclick="triggerAlertScan()">
+      <span class="nav-icon">⚡</span>
+      <span>Scan Alerts</span>
+    </button>
+    <button class="nav-tab" onclick="openLocker()">
+      <span class="nav-icon">🎁</span>
+      <span>Wallet</span>
+    </button>
+  </div>
+
+  <!-- Wallet Modal -->
+  <div class="modal-overlay" id="locker-modal">
+    <div class="modal">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="font-size: 1.2rem;">Pulse Wallet</h2>
+        <button onclick="closeLocker()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
+      </div>
+      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">PERKS</div>
+      <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
+        <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.85rem; font-weight:600;">$10 Merch Credit</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">Digital promo code</div>
+          </div>
+          <button onclick="redeem(150, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">150 PTS</button>
+        </div>
+      </div>
+      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">ACTIVITY</div>
+      <div id="history-box" style="background:#0a0c10; padding:0.5rem; border-radius:8px; font-size:0.75rem; max-height:140px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <script>
+    function switchView(tab) {
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+
+      if (tab === 'radar') {
+        document.getElementById('view-radar').classList.add('active');
+        document.getElementById('tab-btn-radar').classList.add('active');
+      } else if (tab === 'drops') {
+        document.getElementById('view-drops').classList.add('active');
+        document.getElementById('tab-btn-drops').classList.add('active');
+        loadReleases();
+      }
+    }
+
+    let releasesLoaded = false;
+    function loadReleases() {
+      if (releasesLoaded) return;
+      fetch('/api/releases')
+        .then(r => r.json())
+        .then(data => {
+          const feed = document.getElementById('releases-feed');
+          if (!data.releases || data.releases.length === 0) {
+            feed.innerHTML = '<div class="status-msg">No recent release data found.</div>';
+            return;
+          }
+          feed.innerHTML = data.releases.map(rel => `
+            <div class="release-card">
+              ${rel.image ? `<img src="${rel.image}" class="release-art">` : ''}
+              <div>
+                <div style="font-size: 0.75rem; color: var(--accent); font-weight:700;">${rel.type} &bull; ${rel.date}</div>
+                <div style="font-size: 0.95rem; font-weight:700; margin: 2px 0;">${rel.title}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">${rel.artist}</div>
+              </div>
+              <a href="${rel.url}" target="_blank" class="btn-listen">Listen</a>
+            </div>
+          `).join('');
+          releasesLoaded = true;
+        })
+        .catch(() => {
+          document.getElementById('releases-feed').innerHTML = '<div class="status-msg">Failed to load music feed.</div>';
+        });
+    }
+
+    function refreshWallet() {
+      fetch('/api/wallet')
+        .then(r => r.json())
+        .then(d => {
+          document.getElementById('points-display').innerText = `${d.points} PTS`;
+          const box = document.getElementById('history-box');
+          box.innerHTML = (d.history || []).map(h => `
+            <div style="display:flex; justify-content:space-between; padding:0.25rem 0; border-bottom:1px solid #161a22;">
+              <span>${h.action}</span>
+              <strong style="color:${h.points >= 0 ? 'var(--accent)' : '#ef4444'}">${h.points >= 0 ? '+' : ''}${h.points}</strong>
+            </div>
+          `).join('') || '<div style="color:var(--text-muted)">No activity yet</div>';
+        });
+    }
+
+    function openLocker() { refreshWallet(); document.getElementById('locker-modal').classList.add('open'); }
+    function closeLocker() { document.getElementById('locker-modal').classList.remove('open'); }
+
+    function redeem(cost, perk) {
+      fetch('/api/wallet/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cost: cost, perk_name: perk })
+      })
+      .then(r => r.json().then(b => ({ status: r.status, b: b })))
+      .then(({ status, b }) => {
+        alert(b.message);
+        if (status === 200) refreshWallet();
+      });
+    }
+
+    function handleTicketClick(url, eventName) {
+      fetch('/api/wallet/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_name: eventName })
+      })
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('points-display').innerText = `${d.new_balance} PTS`;
+      });
+      window.open(url, '_blank');
+    }
+
+    function fetchAllArtistEvents() {
+      const zip = document.getElementById('radar-zip').value.trim();
+      const radius = document.getElementById('radar-radius').value;
+
+      document.querySelectorAll('.events-box').forEach((box, idx) => {
+        const artist = box.getAttribute('data-artist');
+        setTimeout(() => {
+          fetch(`/api/events?artist=${encodeURIComponent(artist)}&postal_code=${zip}&radius=${radius}`)
+            .then(r => r.json())
+            .then(data => {
+              if (!data.events || data.events.length === 0) {
+                box.innerHTML = `<div class="status-msg">No shows within ${radius} miles</div>`;
+                return;
+              }
+              box.innerHTML = data.events.map(ev => `
+                <div class="event-chip">
+                  <div>
+                    <div class="event-date">📅 ${ev.date}</div>
+                    <div class="event-title">${ev.name}</div>
+                    <div class="event-venue">📍 ${ev.venue} (${ev.city}, ${ev.state})</div>
+                  </div>
+                  <button onclick="handleTicketClick('${ev.url}', '${ev.name.replace(/'/g, "\\'")}')" class="btn-ticket">+50 Pts</button>
+                </div>
+              `).join('');
+            })
+            .catch(() => { box.innerHTML = `<div class="status-msg">Error loading dates</div>`; });
+        }, idx * 220);
+      });
+    }
+
+    function applyRadarSettings() {
+      localStorage.setItem('radar_zip', document.getElementById('radar-zip').value.trim());
+      localStorage.setItem('radar_radius', document.getElementById('radar-radius').value);
+      fetchAllArtistEvents();
+    }
+
+    function filterCategory(cat) {
+      document.querySelectorAll('.pill').forEach(b => b.classList.toggle('active', b.innerText === cat));
+      document.querySelectorAll('.artist-card').forEach(c => {
+        c.classList.toggle('hidden', !(cat === 'All' || c.getAttribute('data-category') === cat));
+      });
+    }
+
+    let trackedArtists = JSON.parse(localStorage.getItem('tracked_artists') || '[]');
+    function toggleTrack(btn, name) {
+      const s = btn.querySelector('span');
+      if (trackedArtists.includes(name)) {
+        trackedArtists = trackedArtists.filter(a => a !== name);
+        btn.classList.remove('tracking');
+        s.innerText = 'Track';
+      } else {
+        trackedArtists.push(name);
+        btn.classList.add('tracking');
+        s.innerText = 'Tracking';
+      }
+      localStorage.setItem('tracked_artists', JSON.stringify(trackedArtists));
+    }
+
+    function triggerAlertScan() {
+      const zip = document.getElementById('radar-zip').value.trim();
+      const radius = document.getElementById('radar-radius').value;
+      if (!zip) return alert('Enter a zip code first.');
+      if (!trackedArtists.length) return alert('Track at least one artist first.');
+
+      fetch('/api/scan-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artists: trackedArtists, postal_code: zip, radius: radius })
+      })
+      .then(r => r.json())
+      .then(res => {
+        alert(res.message);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshWallet();
+      document.getElementById('radar-zip').value = localStorage.getItem('radar_zip') || '';
+      document.getElementById('radar-radius').value = localStorage.getItem('radar_radius') || '150';
+      
+      document.querySelectorAll('.artist-card').forEach(c => {
+        const n = c.querySelector('.artist-name').innerText;
+        if (trackedArtists.includes(n)) {
+          c.querySelector('.btn-track').classList.add('tracking');
+          c.querySelector('.btn-track span').innerText = 'Tracking';
+        }
+      });
+      fetchAllArtistEvents();
+    });
+  </script>
+</body>
+</html>
