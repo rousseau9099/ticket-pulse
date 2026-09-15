@@ -31,6 +31,27 @@
       --success: #22c55e;
     }
 
+/* Desktop Header Navigation */
+    .desktop-nav { display: none; gap: 0.5rem; }
+    .nav-link {
+      background: none; border: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 700;
+      padding: 0.5rem 0.85rem; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+    }
+    .nav-link:hover { color: var(--text-main); background: rgba(255,255,255,0.04); }
+    .nav-link.active { color: var(--accent); background: rgba(0, 240, 255, 0.08); }
+
+    @media (min-width: 1024px) {
+      .desktop-nav { display: flex; }
+    }
+
+    /* Value Proposition Hero Banner */
+    .hero-banner {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.05), rgba(255, 42, 133, 0.05));
+      border: 1px solid var(--card-border); border-radius: 18px; padding: 1.5rem; margin-bottom: 1.25rem; text-align: center;
+    }
+    .hero-banner h2 { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.4rem; }
+    .hero-banner p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; max-width: 600px; margin: 0 auto; }
+
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html { scroll-behavior: smooth; }
     body {
@@ -271,6 +292,14 @@
         </div>
         <h1>Ticket<span>Pulse</span></h1>
       </div>
+
+      <!-- DESKTOP & GENERAL NAV TABS -->
+      <nav class="desktop-nav" aria-label="Main Navigation">
+        <button type="button" class="nav-link active" id="nav-radar" onclick="switchView('radar')">Radar</button>
+        <button type="button" class="nav-link" id="nav-community" onclick="switchView('community')">Community Feed</button>
+        <button type="button" class="nav-link" id="nav-profile" onclick="switchView('profile')">Scrapbook & Badges</button>
+      </nav>
+
       <div>
         <button type="button" class="header-profile-btn" onclick="switchView('profile')">
           <span id="header-user-badge">👤 Profile</span>
@@ -283,6 +312,11 @@
     <main>
       <!-- ================= RADAR VIEW ================= -->
       <div id="view-radar" class="tab-view active">
+<!-- VALUE PROP HERO -->
+        <div class="hero-banner">
+          <h2>Your Live Music Life, Gamified 🎸</h2>
+          <p>Track your favorite touring artists, check-in to live shows, collect state & venue stamps, and unlock legendary concert achievements with other music fans.</p>
+        </div>
         <!-- SYNC HUB -->
         <div class="radar-box sync-hub">
           <div class="sync-header">
