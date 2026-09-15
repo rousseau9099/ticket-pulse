@@ -790,25 +790,49 @@ def normalize_ticketmaster_event(event):
 
 def ticketmaster_events(params):
     if not TICKETMASTER_API_KEY:
-        return [], None  # Fail gracefully with empty list rather than 503ing the UI
+        return None, (
+            jsonify({
+                "success": False,
+                "message": (
+                    "Ticketmaster API is not configured. "
+                    "Add TICKETMASTER_API_KEY to Render."
+                )
+            }),
+            503
+        )
 
     params = dict(params)
     params["apikey"] = TICKETMASTER_API_KEY
     params["countryCode"] = "US"
+    params["classificationName"] = "music"
     params["unit"] = "miles"
-    # Note: Removed hardcoded classificationName="music" because 
-    # some artist keywords match better without strict genre segmenting
 
     try:
         response = requests.get(
             TM_EVENTS_URL,
             params=params,
-            timeout=8,
+            timeout=10,
         )
-        
-        if response.status_code != 200:
-            return [], None
 
+        if response.status_code == 401:
+            return None, (
+                jsonify({
+                    "success": False,
+                    "message": "Ticketmaster API key was rejected."
+                }),
+                502
+            )
+
+        if response.status_code == 429:
+            return None, (
+                jsonify({
+                    "success": False,
+                    "message": "Ticket search limit reached. Try again shortly."
+                }),
+                429
+            )
+
+        response.raise_for_status()
         data = response.json()
         events = data.get("_embedded", {}).get("events", [])
 
@@ -817,47 +841,19 @@ def ticketmaster_events(params):
             for event in events
         ], None
 
-    except requests.RequestException:
-        return [], None
+    except requests.RequestException as exc:
+        app.logger.exception("Ticketmaster request failed: %s", exc)
+        return None, (
+            jsonify({
+                "success": False,
+                "message": "Concert provider is temporarily unavailable."
+            }),
+            502
+        )
 
-
-@app.route("/api/events")
-def api_events():
-    artist = request.args.get("artist", "").strip()
-    radius = request.args.get("radius", "150")
-    postal_code = request.args.get("postal_code", "").strip()
-    latlong = request.args.get("latlong", "").strip()
-
-    if not artist:
-        return jsonify({"success": True, "events": []})
-
-    try:
-        radius_number = min(max(int(radius), 1), 500)
-    except ValueError:
-        radius_number = 150
-
-    params = {
-        "keyword": artist,
-        "radius": radius_number,
-        "size": 10,
-        "sort": "date,asc",
-    }
-
-    if latlong and re.match(r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?$", latlong):
-        params["latlong"] = latlong
-    elif postal_code:
-        params["postalCode"] = postal_code
-
-    events, _ = ticketmaster_events(params)
-    
-    return jsonify({
-        "success": True,
-        "events": events or [],
-    })
 
 # =========================================================
-# =========================================================
-# API: ARTIST EVENTS
+# API: EVENTS & NEARBY
 # =========================================================
 
 @app.route("/api/events")
@@ -885,10 +881,22 @@ def api_events():
         "size": 20,
         "sort": "date,asc",
     }
-...
-# =========================================================
-# API: NEARBY EVENTS
-# =========================================================
+
+    if latlong:
+        if re.match(r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?$", latlong):
+            params["latlong"] = latlong
+    elif postal_code:
+        params["postalCode"] = postal_code
+
+    events, error = ticketmaster_events(params)
+    if error:
+        return error
+
+    return jsonify({
+        "success": True,
+        "events": events or [],
+    })
+
 
 @app.route("/api/nearby")
 def api_nearby():
@@ -930,7 +938,7 @@ def api_nearby():
 
 
 # =========================================================
-# SHOW DATABASE
+# SHOW DATABASE & STATS HELPERS
 # =========================================================
 
 def save_show(event):
@@ -978,10 +986,6 @@ def save_show(event):
     )
     return show_id
 
-
-# =========================================================
-# STATS
-# =========================================================
 
 def get_user_stats(user_id):
     concerts = db_fetchone(
@@ -1060,10 +1064,6 @@ def get_user_stats(user_id):
     }
 
 
-# =========================================================
-# STREAK
-# =========================================================
-
 def calculate_month_streak(user_id):
     rows = db_fetchall(
         """
@@ -1099,10 +1099,6 @@ def calculate_month_streak(user_id):
 
     return streak
 
-
-# =========================================================
-# ACHIEVEMENT ENGINE
-# =========================================================
 
 def achievement_progress(user_id):
     stats = get_user_stats(user_id)
@@ -1275,7 +1271,7 @@ def api_achievements():
 
 
 # =========================================================
-# API: CHECK IN
+# API: CHECK IN & HISTORY
 # =========================================================
 
 @app.route("/api/checkins", methods=["POST"])
@@ -1346,10 +1342,6 @@ def api_checkin():
     })
 
 
-# =========================================================
-# API: CONCERT HISTORY & PROFILE
-# =========================================================
-
 @app.route("/api/history")
 def api_history():
     user, error = require_login()
@@ -1377,6 +1369,10 @@ def api_history():
     })
 
 
+# =========================================================
+# API: PROFILE & COMMUNITY
+# =========================================================
+
 @app.route("/api/profile")
 def api_profile():
     user, error = require_login()
@@ -1402,39 +1398,6 @@ def api_profile():
         "achievements": [dict(row) for row in achievements],
     })
 
-
-@app.route("/api/profile/<username>")
-def api_public_profile(username):
-    user = db_fetchone("SELECT * FROM users WHERE username = ?", (username,))
-    if not user:
-        return jsonify({
-            "success": False,
-            "message": "User not found."
-        }), 404
-
-    stats = get_user_stats(user["id"])
-    achievements = db_fetchall(
-        """
-        SELECT a.achievement_key, a.name, a.icon, a.category, ua.unlocked_at
-        FROM user_achievements ua
-        JOIN achievements a ON a.id = ua.achievement_id
-        WHERE ua.user_id = ?
-        ORDER BY ua.unlocked_at DESC
-        """,
-        (user["id"],)
-    )
-
-    return jsonify({
-        "success": True,
-        "user": dict(user),
-        "stats": stats,
-        "achievements": [dict(row) for row in achievements],
-    })
-
-
-# =========================================================
-# API: COMMUNITY FEED & SOCIAL
-# =========================================================
 
 @app.route("/api/community/feed")
 def api_community_feed():
@@ -1464,44 +1427,6 @@ def api_community_feed():
     return jsonify({
         "success": True,
         "posts": [dict(row) for row in rows]
-    })
-
-
-@app.route("/api/community/posts", methods=["POST"])
-def api_create_post():
-    user, error = require_login()
-    if error:
-        return error
-
-    data = request.get_json(silent=True) or {}
-    body = str(data.get("body", "")).strip()
-
-    if not body:
-        return jsonify({
-            "success": False,
-            "message": "Post cannot be empty."
-        }), 400
-
-    if len(body) > 500:
-        return jsonify({
-            "success": False,
-            "message": "Posts are limited to 500 characters."
-        }), 400
-
-    show_id = data.get("show_id")
-    post_id = secrets.token_urlsafe(18)
-
-    db_execute(
-        """
-        INSERT INTO posts (id, user_id, show_id, body, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (post_id, user["id"], show_id, body, utc_now())
-    )
-
-    return jsonify({
-        "success": True,
-        "post_id": post_id,
     })
 
 
@@ -1541,157 +1466,8 @@ def api_like_post(post_id):
     })
 
 
-@app.route("/api/community/posts/<post_id>/comments", methods=["GET"])
-def api_get_comments(post_id):
-    rows = db_fetchall(
-        """
-        SELECT c.id, c.body, c.created_at, u.username, u.display_name, u.avatar_url
-        FROM comments c
-        JOIN users u ON u.id = c.user_id
-        WHERE c.post_id = ?
-        ORDER BY c.created_at ASC
-        """,
-        (post_id,)
-    )
-
-    return jsonify({
-        "success": True,
-        "comments": [dict(row) for row in rows]
-    })
-
-
-@app.route("/api/community/posts/<post_id>/comments", methods=["POST"])
-def api_add_comment(post_id):
-    user, error = require_login()
-    if error:
-        return error
-
-    data = request.get_json(silent=True) or {}
-    body = str(data.get("body", "")).strip()
-
-    if not body:
-        return jsonify({
-            "success": False,
-            "message": "Comment cannot be empty."
-        }), 400
-
-    if len(body) > 300:
-        return jsonify({
-            "success": False,
-            "message": "Comments are limited to 300 characters."
-        }), 400
-
-    comment_id = secrets.token_urlsafe(18)
-    db_execute(
-        """
-        INSERT INTO comments (id, post_id, user_id, body, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (comment_id, post_id, user["id"], body, utc_now())
-    )
-
-    return jsonify({
-        "success": True,
-        "comment_id": comment_id,
-    })
-
-
-@app.route("/api/users/search")
-def api_user_search():
-    user, error = require_login()
-    if error:
-        return error
-
-    query = request.args.get("q", "").strip()
-    if len(query) < 2:
-        return jsonify({"success": True, "users": []})
-
-    rows = db_fetchall(
-        """
-        SELECT id, username, display_name, avatar_url
-        FROM users
-        WHERE username LIKE ? OR display_name LIKE ?
-        ORDER BY username
-        LIMIT 20
-        """,
-        (f"%{query}%", f"%{query}%")
-    )
-
-    return jsonify({
-        "success": True,
-        "users": [dict(row) for row in rows]
-    })
-
-
-@app.route("/api/users/<username>/follow", methods=["POST"])
-def api_follow_user(username):
-    user, error = require_login()
-    if error:
-        return error
-
-    target = db_fetchone("SELECT * FROM users WHERE username = ?", (username,))
-    if not target:
-        return jsonify({
-            "success": False,
-            "message": "User not found."
-        }), 404
-
-    if target["id"] == user["id"]:
-        return jsonify({
-            "success": False,
-            "message": "You cannot follow yourself."
-        }), 400
-
-    existing = db_fetchone(
-        "SELECT 1 FROM follows WHERE follower_id = ? AND following_id = ?",
-        (user["id"], target["id"])
-    )
-
-    if existing:
-        db_execute(
-            "DELETE FROM follows WHERE follower_id = ? AND following_id = ?",
-            (user["id"], target["id"])
-        )
-        following = False
-    else:
-        db_execute(
-            "INSERT INTO follows (follower_id, following_id, created_at) VALUES (?, ?, ?)",
-            (user["id"], target["id"], utc_now())
-        )
-        following = True
-
-    return jsonify({
-        "success": True,
-        "following": following,
-    })
-
-
 # =========================================================
-# LEGACY & MISC ENDPOINTS
-# =========================================================
-
-@app.route("/api/wallet")
-def api_wallet():
-    user_id = current_user_id()
-    if not user_id:
-        return jsonify({"success": True, "retired": True, "points": 0})
-
-    stats = get_user_stats(user_id)
-    return jsonify({
-        "success": True,
-        "retired": True,
-        "points": 0,
-        "stats": stats,
-    })
-
-
-@app.route("/api/releases")
-def api_releases():
-    return jsonify([])
-
-
-# =========================================================
-# ERROR HANDLERS
+# ERROR HANDLERS & STARTUP
 # =========================================================
 
 @app.errorhandler(404)
@@ -1701,12 +1477,7 @@ def page_not_found(error):
             "success": False,
             "message": "API endpoint not found.",
         }), 404
-
-    return render_template(
-        "index.html",
-        lastfm_user=session.get("username", ""),
-        user_email=session.get("username", ""),
-    ), 404
+    return render_template("index.html"), 404
 
 
 @app.errorhandler(500)
@@ -1716,13 +1487,8 @@ def internal_error(error):
             "success": False,
             "message": "Internal server error.",
         }), 500
-
     return "Internal server error.", 500
 
-
-# =========================================================
-# STARTUP
-# =========================================================
 
 with app.app_context():
     init_db()
