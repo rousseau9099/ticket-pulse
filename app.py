@@ -1,16 +1,16 @@
 import os
 import hashlib
 import requests
-from flask import Flask, request, redirect, jsonify
+from flask import Flask, request, redirect, render_template, jsonify
 
 app = Flask(__name__)
 
-# Load credentials from Render
+# Load credentials from Render Environment Variables
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY")
 LASTFM_API_SECRET = os.environ.get("LASTFM_API_SECRET")
 
 def get_lastfm_username(token, api_key, api_secret):
-    # Sort parameters alphabetically for the Last.fm signature
+    """Exchanges a Last.fm web token for an authenticated username."""
     sig_string = f"api_key{api_key}methodauth.getSessiontoken{token}{api_secret}"
     api_sig = hashlib.md5(sig_string.encode('utf-8')).hexdigest()
     
@@ -22,39 +22,59 @@ def get_lastfm_username(token, api_key, api_secret):
         'format': 'json'
     }
     
-    response = requests.get("http://ws.audioscrobbler.com/2.0/", params=payload)
-    data = response.json()
-    
-    if 'session' in data:
-        return data['session']['name']
+    try:
+        response = requests.get("http://ws.audioscrobbler.com/2.0/", params=payload, timeout=10)
+        data = response.json()
+        if 'session' in data:
+            return data['session']['name']
+    except Exception as e:
+        print(f"Last.fm Auth Error: {e}")
     return None
 
+# ---------------------------------------------------------
+# Web Routes
+# ---------------------------------------------------------
+
+@app.route('/')
+def index():
+    # Renders your homepage and passes the username if returning from login
+    lastfm_user = request.args.get('lastfm_user', '')
+    return render_template('index.html', lastfm_user=lastfm_user)
+
+# Catches both the old /login button and /login/lastfm so nothing 404s
+@app.route('/login')
 @app.route('/login/lastfm')
 def login_lastfm():
-    # Bounces the user to Last.fm to approve the connection
     callback_url = "https://getticketpulse.com/lastfm/callback"
     auth_url = f"http://www.last.fm/api/auth/?api_key={LASTFM_API_KEY}&cb={callback_url}"
     return redirect(auth_url)
 
 @app.route('/lastfm/callback')
 def lastfm_callback():
-    # Last.fm sends them back here with a token
     token = request.args.get('token')
-    
     if not token:
-        return jsonify({"error": "No token provided by Last.fm"}), 400
+        return redirect('/?error=no_token')
         
     username = get_lastfm_username(token, LASTFM_API_KEY, LASTFM_API_SECRET)
-    
     if not username:
-        return jsonify({"error": "Failed to authenticate Last.fm session."}), 401
+        return redirect('/?error=auth_failed')
 
-    # Pass the authenticated username back to your main page
-    # where your existing scanner function can pick it up
     return redirect(f"/?lastfm_user={username}")
 
 # ---------------------------------------------------------
-# Keep your existing Ticketmaster API routes below here
+# Support Endpoints (prevents background fetch errors)
+# ---------------------------------------------------------
+
+@app.route('/api/wallet')
+def api_wallet():
+    return jsonify({"points": 0, "status": "active"})
+
+@app.route('/api/releases')
+def api_releases():
+    return jsonify([])
+
+# ---------------------------------------------------------
+# App Runner
 # ---------------------------------------------------------
 
 if __name__ == '__main__':
