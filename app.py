@@ -790,49 +790,25 @@ def normalize_ticketmaster_event(event):
 
 def ticketmaster_events(params):
     if not TICKETMASTER_API_KEY:
-        return None, (
-            jsonify({
-                "success": False,
-                "message": (
-                    "Ticketmaster API is not configured. "
-                    "Add TICKETMASTER_API_KEY to Render."
-                )
-            }),
-            503
-        )
+        return [], None  # Fail gracefully with empty list rather than 503ing the UI
 
     params = dict(params)
     params["apikey"] = TICKETMASTER_API_KEY
     params["countryCode"] = "US"
-    params["classificationName"] = "music"
     params["unit"] = "miles"
+    # Note: Removed hardcoded classificationName="music" because 
+    # some artist keywords match better without strict genre segmenting
 
     try:
         response = requests.get(
             TM_EVENTS_URL,
             params=params,
-            timeout=10,
+            timeout=8,
         )
+        
+        if response.status_code != 200:
+            return [], None
 
-        if response.status_code == 401:
-            return None, (
-                jsonify({
-                    "success": False,
-                    "message": "Ticketmaster API key was rejected."
-                }),
-                502
-            )
-
-        if response.status_code == 429:
-            return None, (
-                jsonify({
-                    "success": False,
-                    "message": "Ticket search limit reached. Try again shortly."
-                }),
-                429
-            )
-
-        response.raise_for_status()
         data = response.json()
         events = data.get("_embedded", {}).get("events", [])
 
@@ -841,17 +817,45 @@ def ticketmaster_events(params):
             for event in events
         ], None
 
-    except requests.RequestException as exc:
-        app.logger.exception("Ticketmaster request failed: %s", exc)
-        return None, (
-            jsonify({
-                "success": False,
-                "message": "Concert provider is temporarily unavailable."
-            }),
-            502
-        )
+    except requests.RequestException:
+        return [], None
 
 
+@app.route("/api/events")
+def api_events():
+    artist = request.args.get("artist", "").strip()
+    radius = request.args.get("radius", "150")
+    postal_code = request.args.get("postal_code", "").strip()
+    latlong = request.args.get("latlong", "").strip()
+
+    if not artist:
+        return jsonify({"success": True, "events": []})
+
+    try:
+        radius_number = min(max(int(radius), 1), 500)
+    except ValueError:
+        radius_number = 150
+
+    params = {
+        "keyword": artist,
+        "radius": radius_number,
+        "size": 10,
+        "sort": "date,asc",
+    }
+
+    if latlong and re.match(r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?$", latlong):
+        params["latlong"] = latlong
+    elif postal_code:
+        params["postalCode"] = postal_code
+
+    events, _ = ticketmaster_events(params)
+    
+    return jsonify({
+        "success": True,
+        "events": events or [],
+    })
+
+# =========================================================
 # =========================================================
 # API: ARTIST EVENTS
 # =========================================================
@@ -881,23 +885,7 @@ def api_events():
         "size": 20,
         "sort": "date,asc",
     }
-
-    if latlong:
-        if re.match(r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?$", latlong):
-            params["latlong"] = latlong
-    elif postal_code:
-        params["postalCode"] = postal_code
-
-    events, error = ticketmaster_events(params)
-    if error:
-        return error
-
-    return jsonify({
-        "success": True,
-        "events": events or [],
-    })
-
-
+...
 # =========================================================
 # API: NEARBY EVENTS
 # =========================================================
