@@ -232,6 +232,12 @@
       padding: 0.5rem 0.85rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; cursor: pointer;
     }
     .btn-checkin:hover { background: rgba(34, 197, 94, 0.25); }
+    .btn-verify {
+      background: rgba(0, 240, 255, 0.12); border: 1px solid rgba(0, 240, 255, 0.4); color: var(--accent);
+      padding: 0.5rem 0.85rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; cursor: pointer;
+    }
+    .btn-verify:hover { background: rgba(0, 240, 255, 0.22); }
+    .btn-verify:disabled { opacity: 0.55; cursor: wait; }
 
     /* Community Post Card */
     .post-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 1.25rem; margin-bottom: 1rem; }
@@ -716,6 +722,15 @@
         checkinBtn.onclick = () => performCheckin(ev);
         actions.appendChild(checkinBtn);
 
+        if (ev.latitude != null && ev.longitude != null) {
+          const verifyBtn = document.createElement('button');
+          verifyBtn.type = 'button';
+          verifyBtn.className = 'btn-verify';
+          verifyBtn.textContent = '📍 Verify I\'m Here';
+          verifyBtn.onclick = () => performGpsVerify(ev, verifyBtn);
+          actions.appendChild(verifyBtn);
+        }
+
         if (ev.url) {
           const ticketLink = document.createElement('a');
           ticketLink.href = ev.url;
@@ -743,6 +758,62 @@
       } catch (err) {
         showToast(err.message || 'Check-in failed.', 'error');
       }
+    }
+
+    function performGpsVerify(eventData, button) {
+      if (!navigator.geolocation) {
+        showToast('Geolocation is not supported by this browser.', 'error');
+        return;
+      }
+
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Locating...';
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          button.textContent = 'Verifying...';
+
+          try {
+            const data = await fetchJSON('/api/checkins/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event_id: eventData.id,
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                share: true
+              })
+            });
+
+            showToast(
+              `Verified! You're about ${data.distance_miles} mi from the venue.`,
+              'success'
+            );
+
+            button.textContent = '✅ Verified';
+            refreshProfileData();
+          } catch (err) {
+            showToast(err.message || 'Unable to verify this check-in.', 'error');
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        },
+        (error) => {
+          let message = 'Unable to determine your location.';
+          if (error.code === error.PERMISSION_DENIED) {
+            message = 'Location permission was denied.';
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            message = 'Your location is currently unavailable.';
+          } else if (error.code === error.TIMEOUT) {
+            message = 'Location request timed out. Try again.';
+          }
+          showToast(message, 'error');
+          button.disabled = false;
+          button.textContent = originalText;
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
     }
 
     async function toggleTrackArtist(name, btn) {

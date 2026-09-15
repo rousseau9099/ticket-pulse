@@ -1,9 +1,10 @@
 import os
 import re
+import math
 import sqlite3
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import (
@@ -265,7 +266,48 @@ def init_db():
         """
     )
 
+    migrate_db()
     seed_achievements()
+
+    db.commit()
+
+# =========================================================
+# DATABASE MIGRATIONS
+# =========================================================
+
+def migrate_db():
+    """
+    Lightweight, idempotent migrations for columns added after the
+    initial schema. SQLite has no 'ADD COLUMN IF NOT EXISTS', so we
+    check PRAGMA table_info first.
+    """
+
+    db = get_db()
+
+    shows_cols = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(shows)").fetchall()
+    }
+
+    if "latitude" not in shows_cols:
+        db.execute("ALTER TABLE shows ADD COLUMN latitude REAL")
+
+    if "longitude" not in shows_cols:
+        db.execute("ALTER TABLE shows ADD COLUMN longitude REAL")
+
+    checkin_cols = {
+        row["name"]
+        for row in db.execute("PRAGMA table_info(checkins)").fetchall()
+    }
+
+    if "check_lat" not in checkin_cols:
+        db.execute("ALTER TABLE checkins ADD COLUMN check_lat REAL")
+
+    if "check_lng" not in checkin_cols:
+        db.execute("ALTER TABLE checkins ADD COLUMN check_lng REAL")
+
+    if "distance_miles" not in checkin_cols:
+        db.execute("ALTER TABLE checkins ADD COLUMN distance_miles REAL")
 
     db.commit()
 
@@ -507,28 +549,28 @@ ACHIEVEMENT_DEFINITIONS = [
 
     (
         "verified_1",
-        "Ticket Punched",
-        "Have your first verified ticket.",
-        "🎟️",
-        "tickets",
+        "First Confirmed",
+        "GPS-verify your first show.",
+        "📍",
+        "verified",
         1,
     ),
 
     (
         "verified_5",
-        "Ticket Collector",
-        "Have 5 verified tickets.",
-        "🎫",
-        "tickets",
+        "Trusted Attendee",
+        "GPS-verify 5 shows.",
+        "✅",
+        "verified",
         5,
     ),
 
     (
         "verified_25",
-        "Stub Hoarder",
-        "Have 25 verified tickets.",
-        "📚",
-        "tickets",
+        "Verified Regular",
+        "GPS-verify 25 shows.",
+        "🛡️",
+        "verified",
         25,
     ),
 
@@ -1126,6 +1168,25 @@ def normalize_ticketmaster_event(event):
         ""
     )
 
+    location = venue.get(
+        "location",
+        {}
+    )
+
+    def safe_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    latitude = safe_float(
+        location.get("latitude")
+    )
+
+    longitude = safe_float(
+        location.get("longitude")
+    )
+
     image_url = ""
 
     images = event.get(
@@ -1176,6 +1237,8 @@ def normalize_ticketmaster_event(event):
             ""
         ),
         "image": image_url,
+        "latitude": latitude,
+        "longitude": longitude,
         "genre": (
             event.get(
                 "classifications",
@@ -1272,6 +1335,163 @@ def ticketmaster_events(params):
             }),
             502
         )
+
+# =========================================================
+# TICKETMASTER: SINGLE EVENT LOOKUP (trusted, server-side)
+# =========================================================
+
+TM_EVENT_DETAIL_URL = (
+    "https://app.ticketmaster.com/discovery/v2/events/{id}.json"
+)
+
+def fetch_ticketmaster_event_by_id(event_id):
+
+    if not TICKETMASTER_API_KEY:
+        return None, (
+            jsonify({
+                "success": False,
+                "message": "Ticketmaster API is not configured."
+            }),
+            503
+        )
+
+    if not event_id:
+        return None, (
+            jsonify({
+                "success": False,
+                "message": "event_id is required."
+            }),
+            400
+        )
+
+    try:
+        response = requests.get(
+            TM_EVENT_DETAIL_URL.format(id=event_id),
+            params={"apikey": TICKETMASTER_API_KEY},
+            timeout=10,
+        )
+
+        if response.status_code == 404:
+            return None, (
+                jsonify({
+                    "success": False,
+                    "message": "Show not found or no longer listed."
+                }),
+                404
+            )
+
+        response.raise_for_status()
+
+        return normalize_ticketmaster_event(response.json()), None
+
+    except requests.RequestException as exc:
+
+        app.logger.exception(
+            "Ticketmaster event lookup failed: %s",
+            exc
+        )
+
+        return None, (
+            jsonify({
+                "success": False,
+                "message": "Concert provider is temporarily unavailable."
+            }),
+            502
+        )
+
+# =========================================================
+# GPS VERIFICATION HELPERS
+# =========================================================
+
+VERIFY_RADIUS_MILES = 0.5
+
+def haversine_miles(lat1, lon1, lat2, lon2):
+
+    earth_radius_miles = 3958.8
+
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+
+    return 2 * earth_radius_miles * math.asin(math.sqrt(a))
+
+def save_verified_show(event):
+    """
+    Only ever called with an event that was fetched server-side from
+    Ticketmaster by ID (see fetch_ticketmaster_event_by_id). Never
+    call this with client-supplied event fields directly.
+    """
+
+    show_id = event.get("id") or secrets.token_urlsafe(12)
+
+    existing = db_fetchone(
+        "SELECT * FROM shows WHERE external_id = ?",
+        (show_id,)
+    )
+
+    if existing:
+
+        # Backfill coordinates if we have them now and didn't before.
+        if (
+            event.get("latitude") is not None
+            and existing["latitude"] is None
+        ):
+            db_execute(
+                "UPDATE shows SET latitude = ?, longitude = ? WHERE id = ?",
+                (
+                    event.get("latitude"),
+                    event.get("longitude"),
+                    existing["id"],
+                )
+            )
+
+        return existing["id"]
+
+    db_execute(
+        """
+        INSERT INTO shows
+        (
+            id,
+            external_id,
+            name,
+            artist,
+            venue,
+            city,
+            state,
+            event_date,
+            url,
+            image_url,
+            genre,
+            latitude,
+            longitude,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            show_id,
+            show_id,
+            event.get("name", ""),
+            event.get("artist", ""),
+            event.get("venue", ""),
+            event.get("city", ""),
+            event.get("state", ""),
+            event.get("date", ""),
+            event.get("url", ""),
+            event.get("image", ""),
+            event.get("genre", ""),
+            event.get("latitude"),
+            event.get("longitude"),
+            utc_now(),
+        )
+    )
+
+    return show_id
 
 # =========================================================
 # API: ARTIST EVENTS
@@ -2064,6 +2284,208 @@ def api_checkin():
         "success": True,
         "checkin_id": checkin_id,
         "verified": False,
+        "unlocked": unlocked,
+        "stats": get_user_stats(
+            user["id"]
+        ),
+    })
+
+# =========================================================
+# API: GPS-VERIFIED CHECK-IN
+# =========================================================
+
+@app.route("/api/checkins/verify", methods=["POST"])
+def api_checkin_verify():
+
+    user, error = require_login()
+
+    if error:
+        return error
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+    event_id = str(
+        data.get("event_id", "")
+    ).strip()
+
+    if not event_id:
+
+        return jsonify({
+            "success": False,
+            "message": "event_id is required."
+        }), 400
+
+    try:
+        user_lat = float(data.get("lat"))
+        user_lng = float(data.get("lng"))
+    except (TypeError, ValueError):
+
+        return jsonify({
+            "success": False,
+            "message": "Valid GPS coordinates are required to verify a check-in."
+        }), 400
+
+    event, error = fetch_ticketmaster_event_by_id(event_id)
+
+    if error:
+        return error
+
+    if event.get("latitude") is None or event.get("longitude") is None:
+
+        return jsonify({
+            "success": False,
+            "message": (
+                "This venue doesn't have location data yet, so it can't "
+                "be GPS-verified. You can still log it as a regular check-in."
+            )
+        }), 422
+
+    # Only allow verification on the day of the show (plus a grace day
+    # for late-running events crossing midnight).
+    try:
+        event_date = datetime.strptime(
+            event["date"], "%Y-%m-%d"
+        ).date()
+
+        today = datetime.now(timezone.utc).date()
+
+        if today < event_date or today > event_date + timedelta(days=1):
+
+            return jsonify({
+                "success": False,
+                "message": "GPS check-in is only available on the day of the show."
+            }), 422
+
+    except (ValueError, KeyError):
+        pass  # Can't parse date — don't block on it, fall through.
+
+    distance = haversine_miles(
+        user_lat, user_lng,
+        event["latitude"], event["longitude"]
+    )
+
+    if distance > VERIFY_RADIUS_MILES:
+
+        return jsonify({
+            "success": False,
+            "message": (
+                f"You need to be at the venue to verify this check-in "
+                f"(you're about {distance:.1f} mi away)."
+            )
+        }), 403
+
+    show_id = save_verified_show(event)
+
+    existing = db_fetchone(
+        """
+        SELECT id, verified
+        FROM checkins
+        WHERE user_id = ?
+        AND show_id = ?
+        """,
+        (user["id"], show_id)
+    )
+
+    rating = data.get("rating")
+
+    try:
+        if rating is not None:
+            rating = max(1, min(int(rating), 5))
+    except (TypeError, ValueError):
+        rating = None
+
+    review = str(
+        data.get("review", "")
+    ).strip()[:1000]
+
+    if existing:
+
+        if existing["verified"]:
+
+            return jsonify({
+                "success": False,
+                "message": "You've already verified this show."
+            }), 409
+
+        db_execute(
+            """
+            UPDATE checkins
+            SET verified = 1, source = 'gps',
+                check_lat = ?, check_lng = ?, distance_miles = ?
+            WHERE id = ?
+            """,
+            (user_lat, user_lng, distance, existing["id"])
+        )
+
+        checkin_id = existing["id"]
+
+    else:
+
+        checkin_id = secrets.token_urlsafe(18)
+
+        db_execute(
+            """
+            INSERT INTO checkins
+            (
+                id,
+                user_id,
+                show_id,
+                source,
+                verified,
+                rating,
+                review,
+                check_lat,
+                check_lng,
+                distance_miles,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                checkin_id,
+                user["id"],
+                show_id,
+                "gps",
+                1,
+                rating,
+                review,
+                user_lat,
+                user_lng,
+                distance,
+                utc_now(),
+            )
+        )
+
+    unlocked = update_achievements(
+        user["id"]
+    )
+
+    if data.get("share"):
+
+        post_id = secrets.token_urlsafe(18)
+
+        db_execute(
+            """
+            INSERT INTO posts
+            (id, user_id, show_id, body, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                post_id,
+                user["id"],
+                show_id,
+                f"✅ Verified at {event.get('name', 'a show')}",
+                utc_now(),
+            )
+        )
+
+    return jsonify({
+        "success": True,
+        "checkin_id": checkin_id,
+        "verified": True,
+        "distance_miles": round(distance, 2),
         "unlocked": unlocked,
         "stats": get_user_stats(
             user["id"]
