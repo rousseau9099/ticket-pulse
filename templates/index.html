@@ -47,7 +47,7 @@
       font-family: 'Plus Jakarta Sans', sans-serif;
       background-color: var(--bg);
       color: var(--text-main);
-      padding: 0 1rem 6.5rem 1rem;
+      padding: 0 1rem 7.5rem 1rem;
       position: relative;
       min-height: 100vh;
       overflow-x: hidden;
@@ -88,13 +88,13 @@
       top: 0;
       left: 0;
       right: 0;
-      z-index: 100;
-      background: rgba(7, 9, 12, 0.82);
+      z-index: 1000;
+      background: rgba(7, 9, 12, 0.85);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--card-border);
       padding: 0.85rem 1rem;
-      margin-bottom: 1.5rem;
+      margin: 0 -1rem 1.5rem -1rem;
     }
 
     .header-inner {
@@ -103,6 +103,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      padding: 0 0.5rem;
     }
 
     .brand-group {
@@ -157,7 +158,7 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Master Layout: 1-column mobile / 2-column desktop grid */
+    /* Master Layout: Single-column on mobile, dual-column on desktop */
     .container {
       max-width: 720px;
       margin: 0 auto;
@@ -176,19 +177,13 @@
       .desktop-sidebar {
         display: block !important;
       }
-      .mobile-bottom-bar {
-        display: none !important;
-      }
-      body {
-        padding-bottom: 2rem;
-      }
     }
 
     /* Desktop Sidebar */
     .desktop-sidebar {
       display: none;
       position: sticky;
-      top: 80px;
+      top: 84px;
     }
     .sidebar-panel {
       background: var(--card-bg);
@@ -542,23 +537,24 @@
       cursor: pointer;
     }
 
-    /* Bottom Floating Navigation Dock (Mobile Only) */
+    /* Floating Navigation Dock (Universal - Laptop & Mobile) */
     .mobile-bottom-bar {
       position: fixed;
-      bottom: 12px;
+      bottom: 16px;
       left: 50%;
       transform: translateX(-50%);
-      width: calc(100% - 24px);
+      width: calc(100% - 32px);
       max-width: 520px;
-      background: rgba(10, 14, 20, 0.88);
+      background: rgba(10, 14, 20, 0.92);
       backdrop-filter: blur(24px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 20px;
-      display: flex;
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 22px;
+      display: flex !important;
       justify-content: space-around;
-      padding: 0.6rem 0;
-      z-index: 999;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+      padding: 0.65rem 0.5rem;
+      z-index: 9999;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
     }
     .nav-tab {
       display: flex;
@@ -584,7 +580,7 @@
       inset: 0;
       background: rgba(0,0,0,0.82);
       backdrop-filter: blur(8px);
-      z-index: 1000;
+      z-index: 10000;
       align-items: center;
       justify-content: center;
       padding: 1rem;
@@ -781,7 +777,7 @@
     </aside>
   </div>
 
-  <!-- Mobile Floating Bottom Dock -->
+  <!-- Universal Floating Bottom Dock -->
   <div class="mobile-bottom-bar">
     <button class="nav-tab active" id="tab-btn-radar" onclick="switchView('radar')">
       <span class="nav-icon">📡</span>
