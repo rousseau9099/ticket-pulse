@@ -10,250 +10,433 @@
   
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0b0d10">
+  <meta name="theme-color" content="#07090c">
   
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.svg') }}">
   
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  
   <style>
     :root {
-      --bg: #0b0d10;
-      --card-bg: #14181f;
-      --card-border: #1f2530;
+      --bg: #07090c;
+      --card-bg: rgba(16, 21, 29, 0.72);
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(0, 240, 255, 0.25);
       --accent: #00f0ff;
+      --accent-dim: rgba(0, 240, 255, 0.12);
       --pink: #ff2a85;
+      --pink-glow: rgba(255, 42, 133, 0.35);
       --point: #f59e0b;
       --danger: #ef4444;
-      --text-main: #f3f4f6;
-      --text-muted: #94a3b8;
+      --text-main: #f8fafc;
+      --text-muted: #8b99af;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Plus Jakarta Sans', sans-serif;
       background-color: var(--bg);
       color: var(--text-main);
-      padding: 1rem 1rem 5.5rem 1rem;
+      padding: 1.25rem 1rem 6.5rem 1rem;
+      position: relative;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
-    .container { max-width: 720px; margin: 0 auto; }
+
+    /* Ambient Lighting Mesh & Ghost Watermark */
+    .ambient-glow {
+      position: fixed;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba(0, 240, 255, 0.08) 0%, rgba(255, 42, 133, 0.05) 45%, transparent 70%);
+      filter: blur(80px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .ghost-watermark {
+      position: fixed;
+      top: 15%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 540px;
+      max-width: 90vw;
+      height: 540px;
+      opacity: 0.035;
+      filter: grayscale(20%);
+      z-index: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
     
+    /* Header Navigation */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.75rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.85rem;
       border-bottom: 1px solid var(--card-border);
     }
     .brand-group {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      gap: 0.75rem;
     }
-    .brand-logo {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
+    .brand-logo-frame {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
-    h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
-    h1 span { color: var(--pink); }
+    .brand-logo-frame img { width: 32px; height: 32px; }
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      background: linear-gradient(135deg, var(--pink), #ff70a6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
     
-    .header-actions { display: flex; align-items: center; gap: 0.5rem; }
     .loyalty-widget {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      padding: 0.4rem 0.8rem;
-      border-radius: 10px;
+      background: rgba(20, 26, 36, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      padding: 0.4rem 0.85rem;
+      border-radius: 999px;
       display: flex;
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s;
     }
+    .loyalty-widget:active { transform: scale(0.96); }
+    .loyalty-widget:hover { border-color: var(--point); }
     .points-badge {
-      background: rgba(245, 158, 11, 0.15);
+      background: rgba(245, 158, 11, 0.18);
       color: var(--point);
       font-weight: 700;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-family: 'JetBrains Mono', monospace;
     }
 
+    /* Radar Scanning Control Panel */
     .radar-box {
-      background: #11151c;
-      border: 1px solid #1f2838;
-      border-radius: 12px;
-      padding: 0.85rem;
-      margin-bottom: 1rem;
-    }
-    .radar-title { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.5rem; text-transform: uppercase; }
-    .radar-inputs { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .radar-input {
       background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 1.1rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    .radar-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+    .radar-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .live-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulsePing 2s infinite;
+    }
+    @keyframes pulsePing {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    .radar-inputs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .radar-input {
+      background: rgba(10, 14, 20, 0.85);
       border: 1px solid var(--card-border);
       color: #fff;
-      padding: 0.5rem 0.6rem;
-      border-radius: 8px;
+      padding: 0.6rem 0.75rem;
+      border-radius: 10px;
       font-size: 0.85rem;
       outline: none;
       flex: 1;
-      min-width: 90px;
+      min-width: 95px;
+      font-family: inherit;
+      transition: border-color 0.2s;
     }
+    .radar-input:focus { border-color: var(--accent); }
+    
     .btn-action {
-      background: #1f2838;
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      padding: 0.5rem 0.75rem;
-      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      border-radius: 10px;
       font-size: 0.85rem;
-      font-weight: 700;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 0.3rem;
+      gap: 0.35rem;
+      transition: all 0.15s;
     }
-    .btn-apply {
-      background: var(--accent);
-      border: none;
-      color: #000;
-      padding: 0.5rem 0.9rem;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
+    .btn-action:active { transform: scale(0.96); }
+    .btn-action:hover { background: rgba(255, 255, 255, 0.08); }
 
+    .btn-apply {
+      background: linear-gradient(135deg, var(--accent), #00c2ff);
+      border: none;
+      color: #03080d;
+      padding: 0.6rem 1.1rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 240, 255, 0.3);
+      transition: transform 0.15s;
+    }
+    .btn-apply:active { transform: scale(0.96); }
+
+    /* Segmented Feed Switcher */
     .feed-toggle {
       display: flex;
-      background: #14181f;
+      background: rgba(13, 17, 24, 0.9);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 0.25rem;
-      margin-bottom: 1rem;
-      gap: 0.25rem;
+      border-radius: 12px;
+      padding: 0.3rem;
+      margin-bottom: 1.25rem;
+      gap: 0.3rem;
     }
     .feed-toggle-btn {
       flex: 1;
       background: none;
       border: none;
       color: var(--text-muted);
-      padding: 0.45rem 0.5rem;
-      font-size: 0.8rem;
+      padding: 0.6rem 0.5rem;
+      font-size: 0.82rem;
       font-weight: 700;
-      border-radius: 6px;
+      border-radius: 9px;
       cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .feed-toggle-btn.active { background: var(--pink); color: #fff; }
+    .feed-toggle-btn.active {
+      background: linear-gradient(135deg, var(--pink), #d90368);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--pink-glow);
+    }
 
+    /* Category Filter Carousel */
     .category-scroll {
       display: flex;
-      gap: 0.4rem;
+      gap: 0.45rem;
       overflow-x: auto;
-      padding-bottom: 0.5rem;
-      margin-bottom: 1rem;
+      padding-bottom: 0.65rem;
+      margin-bottom: 1.25rem;
       scrollbar-width: none;
     }
     .category-scroll::-webkit-scrollbar { display: none; }
     .pill {
-      background: var(--card-bg);
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--card-border);
       color: var(--text-muted);
-      padding: 0.4rem 0.85rem;
+      padding: 0.45rem 0.95rem;
       border-radius: 999px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       white-space: nowrap;
+      transition: all 0.2s;
     }
-    .pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    .pill.active {
+      background: var(--accent);
+      color: #03080d;
+      font-weight: 700;
+      border-color: var(--accent);
+      box-shadow: 0 2px 12px rgba(0, 240, 255, 0.3);
+    }
 
     .tab-view { display: none; }
     .tab-view.active { display: block; }
 
+    /* Artist & Concert Cards */
     .artist-feed { display: flex; flex-direction: column; gap: 1rem; }
     .artist-card {
       background: var(--card-bg);
+      backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 1rem;
+      border-radius: 18px;
+      padding: 1.15rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      transition: border-color 0.2s, transform 0.15s;
     }
+    .artist-card:hover { border-color: var(--card-border-hover); }
     .artist-card.hidden { display: none; }
+
     .artist-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.9rem;
     }
-    .artist-left { display: flex; align-items: center; gap: 0.75rem; }
+    .artist-left { display: flex; align-items: center; gap: 0.85rem; }
     .artist-avatar {
-      width: 46px;
-      height: 46px;
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
       object-fit: cover;
-      border: 2px solid var(--card-border);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     }
-    .artist-name { font-size: 1.1rem; font-weight: 700; }
-    .artist-genre { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; font-weight: 700; }
+    .artist-name { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
+    .artist-genre {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
 
     .btn-track {
-      background: #1c222b;
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      padding: 0.35rem 0.65rem;
-      border-radius: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
+      padding: 0.4rem 0.8rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
       cursor: pointer;
+      transition: all 0.2s;
     }
-    .btn-track.tracking { background: rgba(0, 240, 255, 0.15); border-color: var(--accent); color: var(--accent); }
+    .btn-track.tracking {
+      background: rgba(0, 240, 255, 0.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
 
-    .events-box { display: flex; flex-direction: column; gap: 0.6rem; }
+    /* Concert Ticket Stubs */
+    .events-box { display: flex; flex-direction: column; gap: 0.65rem; }
     .event-chip {
-      background: #0d1015;
-      border: 1px solid #1a202c;
-      border-radius: 10px;
-      padding: 0.75rem;
+      background: rgba(10, 13, 18, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.75rem;
+      position: relative;
     }
-    .event-date { color: var(--accent); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
-    .event-title { font-size: 0.85rem; font-weight: 600; margin: 0.15rem 0; }
-    .event-venue { font-size: 0.75rem; color: var(--text-muted); }
+    .event-chip:hover { border-color: rgba(255, 255, 255, 0.12); }
+    
+    .event-date {
+      color: var(--accent);
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .event-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin: 0.15rem 0 0.2rem 0;
+      line-height: 1.3;
+    }
+    .event-venue { font-size: 0.76rem; color: var(--text-muted); }
+
     .btn-ticket {
-      background: var(--pink);
+      background: linear-gradient(135deg, var(--pink), #e60067);
       color: #fff;
       border: none;
-      padding: 0.45rem 0.75rem;
-      border-radius: 6px;
+      padding: 0.55rem 0.95rem;
+      border-radius: 999px;
       font-size: 0.75rem;
-      font-weight: 700;
+      font-weight: 800;
       white-space: nowrap;
       cursor: pointer;
       text-decoration: none;
-      display: inline-block;
+      box-shadow: 0 4px 14px var(--pink-glow);
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .status-msg { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+    .btn-ticket:active { transform: scale(0.95); }
 
-    /* Releases Cards */
+    /* Skeleton Loading Placeholder */
+    .skeleton-box {
+      background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 10px;
+      height: 60px;
+      width: 100%;
+    }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    /* Drops / Album Releases */
     .release-card {
       background: var(--card-bg);
+      backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 0.75rem;
+      border-radius: 14px;
+      padding: 0.85rem;
       display: flex;
       align-items: center;
       gap: 1rem;
       margin-bottom: 0.75rem;
     }
-    .release-art { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
+    .release-art { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
     .btn-listen {
-      background: #1f2937;
-      border: 1px solid #374151;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
       color: #fff;
-      padding: 0.4rem 0.75rem;
-      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
       font-size: 0.75rem;
       font-weight: 700;
       text-decoration: none;
@@ -261,64 +444,72 @@
       white-space: nowrap;
     }
 
-    /* Account / Profile View */
+    /* Profile / Account */
     .profile-card {
       background: var(--card-bg);
+      backdrop-filter: blur(20px);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 1.5rem;
+      border-radius: 18px;
+      padding: 2rem 1.5rem;
       text-align: center;
     }
     .btn-logout {
       display: inline-block;
       width: 100%;
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid var(--danger);
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
       color: var(--danger);
-      padding: 0.75rem;
-      border-radius: 8px;
+      padding: 0.8rem;
+      border-radius: 12px;
       font-size: 0.9rem;
       font-weight: 700;
       text-decoration: none;
-      margin-top: 1rem;
+      margin-top: 1.25rem;
       cursor: pointer;
     }
 
+    /* Bottom Floating Navigation Dock */
     .mobile-bottom-bar {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(14, 17, 23, 0.95);
-      backdrop-filter: blur(10px);
-      border-top: 1px solid var(--card-border);
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 520px;
+      background: rgba(10, 14, 20, 0.88);
+      backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
       display: flex;
       justify-content: space-around;
       padding: 0.6rem 0;
       z-index: 999;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
     }
     .nav-tab {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.2rem;
+      gap: 0.25rem;
       color: var(--text-muted);
-      font-size: 0.7rem;
-      font-weight: 600;
+      font-size: 0.68rem;
+      font-weight: 700;
       cursor: pointer;
       background: none;
       border: none;
+      transition: color 0.15s, transform 0.15s;
     }
     .nav-tab.active { color: var(--pink); }
-    .nav-icon { font-size: 1.2rem; }
+    .nav-tab:active { transform: scale(0.92); }
+    .nav-icon { font-size: 1.15rem; }
 
-    /* Modal */
+    /* Modal Styling */
     .modal-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.8);
-      backdrop-filter: blur(4px);
+      background: rgba(0,0,0,0.82);
+      backdrop-filter: blur(8px);
       z-index: 1000;
       align-items: center;
       justify-content: center;
@@ -326,44 +517,51 @@
     }
     .modal-overlay.open { display: flex; }
     .modal {
-      background: #141820;
-      border: 1px solid #232a38;
-      border-radius: 16px;
+      background: #0f131a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
       width: 100%;
       max-width: 480px;
-      padding: 1.25rem;
+      padding: 1.5rem;
       max-height: 85vh;
       overflow-y: auto;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
     }
     .email-banner {
-      background: #19212d;
-      border: 1px dashed var(--point);
-      border-radius: 10px;
-      padding: 0.85rem;
-      margin-bottom: 1rem;
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px dashed rgba(245, 158, 11, 0.4);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
     }
     .earning-explainer {
-      background: #0d1117;
-      border: 1px solid #1a2230;
-      border-radius: 8px;
-      padding: 0.6rem;
-      font-size: 0.72rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-size: 0.74rem;
       color: var(--text-muted);
-      line-height: 1.4;
-      margin-bottom: 1rem;
+      line-height: 1.45;
+      margin-bottom: 1.25rem;
     }
   </style>
 </head>
 <body>
+  <!-- Ambient Backlight & Giant Ghost Watermark -->
+  <div class="ambient-glow"></div>
+  <img src="{{ url_for('static', filename='logo.svg') }}" alt="" class="ghost-watermark">
+
   <div class="container">
     <header>
       <div class="brand-group">
-        <img src="{{ url_for('static', filename='logo.svg') }}" alt="TicketPulse Logo" class="brand-logo">
+        <div class="brand-logo-frame">
+          <img src="{{ url_for('static', filename='logo.svg') }}" alt="TicketPulse Logo">
+        </div>
         <h1>Ticket<span>Pulse</span></h1>
       </div>
       <div class="header-actions">
         <div class="loyalty-widget" onclick="openLocker()">
-          <span id="points-display" style="font-size: 0.9rem; font-weight: 800; color: var(--point);">... PTS</span>
+          <span id="points-display" style="font-size: 0.85rem; font-weight: 800; color: var(--point); font-family: 'JetBrains Mono', monospace;">... PTS</span>
           <span class="points-badge">Wallet</span>
         </div>
       </div>
@@ -372,7 +570,12 @@
     <!-- TAB 1: RADAR VIEW -->
     <div id="view-radar" class="tab-view active">
       <div class="radar-box">
-        <div class="radar-title">📍 Live Concert Radar</div>
+        <div class="radar-title-row">
+          <div class="radar-title">
+            <div class="live-indicator"></div>
+            <span>Concert Radar Grid</span>
+          </div>
+        </div>
         <div class="radar-inputs">
           <input type="text" id="radar-zip" class="radar-input" placeholder="Zip Code" style="max-width: 110px;">
           <button class="btn-action" onclick="locateMe()" title="Use GPS Location">
@@ -417,35 +620,38 @@
               </button>
             </div>
             <div class="events-box" id="events-{{ loop.index }}" data-artist="{{ artist.name }}">
-              <div class="status-msg">Scanning tour dates...</div>
+              <div class="skeleton-box"></div>
             </div>
           </div>
         {% endfor %}
       </div>
 
       <div id="feed-nearby" class="artist-feed" style="display: none;">
-        <div class="status-msg" id="nearby-status">Tap "Locate Me" or enter a zip code to scan all live music nearby.</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-bottom: 0.5rem;" id="nearby-status">
+          Tap "Locate Me" or enter a zip code to scan live music in your radius.
+        </div>
         <div id="nearby-events-container" class="events-box"></div>
       </div>
     </div>
 
     <!-- TAB 2: RELEASES VIEW -->
     <div id="view-drops" class="tab-view">
-      <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">🔥 New Albums & Singles</div>
+      <div style="font-size: 1.15rem; font-weight: 800; margin-bottom: 1rem; letter-spacing: -0.02em;">🔥 Latest Music Drops</div>
       <div id="releases-feed">
-        <div class="status-msg">Fetching latest drops from Spotify...</div>
+        <div class="skeleton-box" style="margin-bottom: 0.75rem;"></div>
+        <div class="skeleton-box"></div>
       </div>
     </div>
 
     <!-- TAB 3: ACCOUNT VIEW -->
     <div id="view-account" class="tab-view">
-      <div style="font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem;">👤 Account & Rewards Profile</div>
+      <div style="font-size: 1.15rem; font-weight: 800; margin-bottom: 1rem; letter-spacing: -0.02em;">👤 Fan Profile & Wallet</div>
       <div class="profile-card">
-        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Logo" style="width: 64px; height: 64px; margin-bottom: 0.75rem;">
-        <h3 style="margin-bottom: 0.25rem;">Spotify Connected</h3>
-        <p id="profile-email" style="color: var(--accent); font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem;">Syncing email...</p>
-        <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.4;">
-          Earn 1 Point per $1 spent on official tickets through TicketPulse links. Points post when orders confirm.
+        <img src="{{ url_for('static', filename='logo.svg') }}" alt="Logo" style="width: 72px; height: 72px; margin-bottom: 1rem;">
+        <h3 style="margin-bottom: 0.35rem; font-weight: 800;">Spotify Connected</h3>
+        <p id="profile-email" style="color: var(--accent); font-size: 0.85rem; font-weight: 700; margin-bottom: 0.85rem; font-family: 'JetBrains Mono', monospace;">Syncing account...</p>
+        <p style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; max-width: 420px; margin: 0 auto;">
+          Earn 1 Point for every $1 spent on official tickets through TicketPulse links. Points post automatically once Ticketmaster approves the order.
         </p>
         <a href="/logout" class="btn-logout" onclick="clearLocalClientStorage()">
           🚪 Log Out / Switch Spotify Account
@@ -454,7 +660,7 @@
     </div>
   </div>
 
-  <!-- Bottom Navigation -->
+  <!-- Floating Bottom Dock -->
   <div class="mobile-bottom-bar">
     <button class="nav-tab active" id="tab-btn-radar" onclick="switchView('radar')">
       <span class="nav-icon">📡</span>
@@ -474,25 +680,25 @@
     </button>
     <button class="nav-tab" id="tab-btn-account" onclick="switchView('account')">
       <span class="nav-icon">👤</span>
-      <span>Account</span>
+      <span>Profile</span>
     </button>
   </div>
 
   <!-- Wallet Modal -->
   <div class="modal-overlay" id="locker-modal">
     <div class="modal">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-        <h2 style="font-size: 1.2rem;">Pulse Wallet</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 800;">Pulse Wallet</h2>
         <button onclick="closeLocker()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
       </div>
 
       <!-- Email Capture Banner -->
       <div class="email-banner" id="email-verify-box">
-        <div style="font-size:0.8rem; font-weight:800; color:var(--point); margin-bottom:0.25rem;">⚡ LINK EMAIL (+50 PTS)</div>
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">Save your wallet balance across devices and receive presale alerts.</div>
+        <div style="font-size:0.8rem; font-weight:800; color:var(--point); margin-bottom:0.3rem;">⚡ LINK EMAIL (+50 PTS)</div>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.6rem; line-height: 1.4;">Save your wallet balance across devices and receive presale alerts.</div>
         <div style="display:flex; gap:0.4rem;">
-          <input type="email" id="wallet-email-input" placeholder="Your Email Address" style="flex:1; background:#0b0d10; border:1px solid #2d3748; color:#fff; padding:0.4rem 0.6rem; border-radius:6px; font-size:0.8rem;">
-          <button onclick="submitEmail()" style="background:var(--point); color:#000; border:none; font-weight:700; padding:0.4rem 0.75rem; border-radius:6px; font-size:0.8rem; cursor:pointer;">Claim</button>
+          <input type="email" id="wallet-email-input" placeholder="Your Email Address" style="flex:1; background:#07090c; border:1px solid rgba(255,255,255,0.1); color:#fff; padding:0.5rem 0.75rem; border-radius:8px; font-size:0.8rem; font-family: inherit;">
+          <button onclick="submitEmail()" style="background:var(--point); color:#000; border:none; font-weight:800; padding:0.5rem 0.9rem; border-radius:8px; font-size:0.8rem; cursor:pointer;">Claim</button>
         </div>
       </div>
 
@@ -500,26 +706,26 @@
         💡 <strong>How to Earn:</strong> Get <strong>1 PT per $1 spent</strong> on verified ticket purchases through TicketPulse links. Points post automatically once Ticketmaster approves the order.
       </div>
 
-      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">REWARDS & PERKS</div>
-      <div style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem;">
-        <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-bottom:0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Rewards & Perks</div>
+      <div style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:1.25rem;">
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--card-border); padding:0.85rem; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:0.85rem; font-weight:600;">Monthly $50 Ticket Cash</div>
+            <div style="font-size:0.88rem; font-weight:700;">Monthly $50 Ticket Cash</div>
             <div style="font-size:0.75rem; color:var(--text-muted);">1 Entry into this month's drawing</div>
           </div>
-          <button onclick="redeem(50, 'Monthly $50 Drawing Entry')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">50 PTS</button>
+          <button onclick="redeem(50, 'Monthly $50 Drawing Entry')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.4rem 0.8rem; border-radius:8px; font-weight:800; font-size:0.75rem; font-family: 'JetBrains Mono', monospace; cursor:pointer;">50 PTS</button>
         </div>
-        <div style="background:#0d1015; padding:0.75rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--card-border); padding:0.85rem; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <div style="font-size:0.85rem; font-weight:600;">$10 Official Merch Credit</div>
+            <div style="font-size:0.88rem; font-weight:700;">$10 Official Merch Credit</div>
             <div style="font-size:0.75rem; color:var(--text-muted);">Digital promo code</div>
           </div>
-          <button onclick="redeem(1000, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.35rem 0.7rem; border-radius:6px; font-weight:700; font-size:0.75rem;">1,000 PTS</button>
+          <button onclick="redeem(1000, '$10 Merch Credit')" style="background:rgba(245,158,11,0.15); border:1px solid var(--point); color:var(--point); padding:0.4rem 0.8rem; border-radius:8px; font-weight:800; font-size:0.75rem; font-family: 'JetBrains Mono', monospace; cursor:pointer;">1,000 PTS</button>
         </div>
       </div>
 
-      <div style="font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">ACTIVITY HISTORY</div>
-      <div id="history-box" style="background:#0a0c10; padding:0.5rem; border-radius:8px; font-size:0.75rem; max-height:140px; overflow-y:auto;"></div>
+      <div style="font-size:0.78rem; font-weight:700; color:var(--text-muted); margin-bottom:0.6rem; text-transform: uppercase; letter-spacing: 0.05em;">Activity History</div>
+      <div id="history-box" style="background:#07090c; padding:0.6rem; border-radius:10px; font-size:0.75rem; max-height:140px; overflow-y:auto; border: 1px solid var(--card-border);"></div>
     </div>
   </div>
 
@@ -566,7 +772,7 @@
           localStorage.setItem('radar_coords', currentCoords);
           document.getElementById('radar-zip').value = '';
           localStorage.removeItem('radar_zip');
-          btnText.innerText = '📍 GPS Set';
+          btnText.innerText = '📍 GPS Active';
 
           if (document.getElementById('btn-mode-nearby').classList.contains('active')) {
             fetchNearbyShows();
@@ -588,14 +794,15 @@
       const status = document.getElementById('nearby-status');
       const container = document.getElementById('nearby-events-container');
 
-      status.innerText = 'Scanning all live music nearby...';
-      container.innerHTML = '';
+      container.innerHTML = '<div class="skeleton-box"></div>';
+      status.innerText = 'Scanning all concerts in your radius...';
 
       let query = `/api/events/nearby?radius=${radius}`;
       if (currentCoords) query += `&latlong=${encodeURIComponent(currentCoords)}`;
       else if (zip) query += `&postal_code=${encodeURIComponent(zip)}`;
       else {
         status.innerText = 'Tap "Locate Me" or enter a zip code to scan shows.';
+        container.innerHTML = '';
         return;
       }
 
@@ -604,9 +811,10 @@
         .then(data => {
           if (!data.events || data.events.length === 0) {
             status.innerText = `No live concerts found within ${radius} miles.`;
+            container.innerHTML = '';
             return;
           }
-          status.innerText = `Found ${data.events.length} upcoming shows nearby:`;
+          status.innerText = `Found ${data.events.length} concerts nearby:`;
           container.innerHTML = data.events.map(ev => `
             <div class="event-chip">
               <div>
@@ -628,13 +836,13 @@
           document.getElementById('points-display').innerText = `${d.points} PTS`;
           if (d.email) {
             document.getElementById('wallet-email-input').value = d.email;
-            document.getElementById('profile-email').innerText = `Linked: ${d.email}`;
+            document.getElementById('profile-email').innerText = d.email;
             document.getElementById('email-verify-box').style.display = 'none';
           }
           const box = document.getElementById('history-box');
           box.innerHTML = (d.history || []).map(h => `
-            <div style="display:flex; justify-content:space-between; padding:0.25rem 0; border-bottom:1px solid #161a22;">
-              <span>${h.action}</span>
+            <div style="display:flex; justify-content:space-between; padding:0.35rem 0; border-bottom:1px solid rgba(255,255,255,0.05); font-family: 'JetBrains Mono', monospace;">
+              <span style="font-family: 'Plus Jakarta Sans', sans-serif;">${h.action}</span>
               <strong style="color:${h.points >= 0 ? 'var(--accent)' : '#ef4444'}">${h.points >= 0 ? '+' : ''}${h.points}</strong>
             </div>
           `).join('') || '<div style="color:var(--text-muted)">No activity yet</div>';
@@ -684,16 +892,16 @@
         .then(data => {
           const feed = document.getElementById('releases-feed');
           if (!data.releases || data.releases.length === 0) {
-            feed.innerHTML = '<div class="status-msg">No recent release data found.</div>';
+            feed.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted);">No new releases found.</div>';
             return;
           }
           feed.innerHTML = data.releases.map(rel => `
             <div class="release-card">
               ${rel.image ? `<img src="${rel.image}" class="release-art">` : ''}
               <div>
-                <div style="font-size: 0.75rem; color: var(--accent); font-weight:700;">${rel.type} &bull; ${rel.date}</div>
-                <div style="font-size: 0.95rem; font-weight:700; margin: 2px 0;">${rel.title}</div>
-                <div style="font-size: 0.8rem; color: var(--text-muted);">${rel.artist}</div>
+                <div style="font-size: 0.72rem; color: var(--accent); font-weight:700; font-family: 'JetBrains Mono', monospace;">${rel.type} &bull; ${rel.date}</div>
+                <div style="font-size: 0.92rem; font-weight:700; margin: 2px 0;">${rel.title}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted);">${rel.artist}</div>
               </div>
               <a href="${rel.url}" target="_blank" class="btn-listen">Listen</a>
             </div>
@@ -717,7 +925,7 @@
             .then(r => r.json())
             .then(data => {
               if (!data.events || data.events.length === 0) {
-                box.innerHTML = `<div class="status-msg">No shows within ${radius} miles</div>`;
+                box.innerHTML = `<div style="font-size:0.75rem; color:var(--text-muted); font-style:italic;">No tour dates within ${radius} miles</div>`;
                 return;
               }
               box.innerHTML = data.events.map(ev => `
@@ -731,7 +939,7 @@
                 </div>
               `).join('');
             })
-            .catch(() => { box.innerHTML = `<div class="status-msg">Error loading dates</div>`; });
+            .catch(() => { box.innerHTML = `<div style="font-size:0.75rem; color:var(--text-muted);">Error scanning tour dates</div>`; });
         }, idx * 220);
       });
     }
@@ -790,7 +998,7 @@
       refreshWallet();
       document.getElementById('radar-zip').value = localStorage.getItem('radar_zip') || '';
       document.getElementById('radar-radius').value = localStorage.getItem('radar_radius') || '150';
-      if (currentCoords) document.getElementById('locate-btn-text').innerText = '📍 GPS Set';
+      if (currentCoords) document.getElementById('locate-btn-text').innerText = '📍 GPS Active';
       
       document.querySelectorAll('.artist-card').forEach(c => {
         const n = c.querySelector('.artist-name').innerText;
