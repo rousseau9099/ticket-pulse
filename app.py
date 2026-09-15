@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 import requests
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyOAuth, SpotifyClientCredentials
 
 load_dotenv()
 
@@ -23,6 +23,35 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "ticketpulse-v3-isolated-session-
 EVENT_CACHE = {}
 ZIP_GEO_CACHE = {}
 DB_FILE = "alerts.db"
+
+# Public Spotify client (No user OAuth required - bypasses the 250k MAU limit)
+sp_public = spotipy.Spotify(
+    auth_manager=SpotifyClientCredentials(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET
+    )
+)
+
+# Preset Curated Taste Packs (Zero-Typing Onboarding)
+TASTE_PACKS = {
+    "rock_metal": [
+        "Falling in Reverse", "The Funeral Portrait", "Asking Alexandria", 
+        "Slipknot", "Avenged Sevenfold", "Motionless In White", "Bring Me The Horizon", 
+        "Bad Omens", "I Prevail", "Architects"
+    ],
+    "alt_indie": [
+        "Deftones", "Turnstile", "The Smashing Pumpkins", "Foo Fighters", 
+        "Queens of the Stone Age", "Blink-182", "Paramore", "Cage the Elephant"
+    ],
+    "country_americana": [
+        "Zach Bryan", "Tyler Childers", "Morgan Wallen", "Cody Jinks", 
+        "Chris Stapleton", "Colter Wall", "Luke Combs", "Turnpike Troubadours"
+    ],
+    "top_touring": [
+        "Metallica", "Post Malone", "Noah Kahan", "Billie Eilish", 
+        "Tool", "Iron Maiden", "Shinedown", "Lainey Wilson"
+    ]
+}
 
 
 def init_db():
@@ -61,31 +90,23 @@ def init_db():
         )
     """)
 
-    # Schema migration checks
     c.execute("PRAGMA table_info(user_wallet)")
     wallet_cols = [col[1] for col in c.fetchall()]
     if "user_id" not in wallet_cols:
-        try:
-            c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
-        except sqlite3.OperationalError:
-            pass
+        try: c.execute("ALTER TABLE user_wallet ADD COLUMN user_id TEXT")
+        except sqlite3.OperationalError: pass
     if "email" not in wallet_cols:
-        try:
-            c.execute("ALTER TABLE user_wallet ADD COLUMN email TEXT")
-        except sqlite3.OperationalError:
-            pass
+        try: c.execute("ALTER TABLE user_wallet ADD COLUMN email TEXT")
+        except sqlite3.OperationalError: pass
 
     c.execute("PRAGMA table_info(points_history)")
     history_cols = [col[1] for col in c.fetchall()]
     if "user_id" not in history_cols:
-        try:
-            c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
-        except sqlite3.OperationalError:
-            pass
+        try: c.execute("ALTER TABLE points_history ADD COLUMN user_id TEXT")
+        except sqlite3.OperationalError: pass
 
     conn.commit()
     conn.close()
-
 
 init_db()
 
@@ -156,10 +177,8 @@ def wrap_affiliate_url(target_url, user_id="guest"):
 
 def get_lat_long_from_zip(zip_code):
     zip_str = str(zip_code).strip()
-    if not zip_str:
-        return None
-    if zip_str in ZIP_GEO_CACHE:
-        return ZIP_GEO_CACHE[zip_str]
+    if not zip_str: return None
+    if zip_str in ZIP_GEO_CACHE: return ZIP_GEO_CACHE[zip_str]
     try:
         res = requests.get(f"https://api.zippopotam.us/us/{zip_str}", timeout=4)
         if res.status_code == 200:
@@ -170,23 +189,17 @@ def get_lat_long_from_zip(zip_code):
                 coords = f"{lat},{lon}"
                 ZIP_GEO_CACHE[zip_str] = coords
                 return coords
-    except Exception:
-        pass
+    except Exception: pass
     return None
 
 
 def categorize_genres(genre_list):
     text = " ".join(genre_list).lower()
-    if any(k in text for k in ["metal", "deathcore", "metalcore", "djent"]):
-        return "Metal"
-    if any(k in text for k in ["country", "americana", "bluegrass"]):
-        return "Country"
-    if any(k in text for k in ["rock", "grunge", "punk"]):
-        return "Rock"
-    if any(k in text for k in ["indie", "alternative"]):
-        return "Alternative"
-    if any(k in text for k in ["pop", "dance", "synth"]):
-        return "Pop"
+    if any(k in text for k in ["metal", "deathcore", "metalcore", "djent"]): return "Metal"
+    if any(k in text for k in ["country", "americana", "bluegrass"]): return "Country"
+    if any(k in text for k in ["rock", "grunge", "punk"]): return "Rock"
+    if any(k in text for k in ["indie", "alternative"]): return "Alternative"
+    if any(k in text for k in ["pop", "dance", "synth"]): return "Pop"
     return "Rock" if not text else "Other"
 
 
@@ -195,98 +208,138 @@ def categorize_genres(genre_list):
 @app.route("/")
 def home():
     sp = get_current_user_sp()
-    
-    # CRITICAL: If not logged in (e.g. Impact Verification Bot), serve HTML with the meta tag directly at "/"
-    if not sp:
-        sp_oauth = create_spotify_oauth()
-        auth_url = sp_oauth.get_authorize_url()
-        return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name='impact-site-verification' value='9a3ee732-0041-47ec-a4cb-1249e556fa5b'>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TicketPulse - Live Concert Radar</title>
-    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
-    <style>
-        body {{
-            background: #0b0d10;
-            color: #f3f4f6;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            text-align: center;
-            padding: 1.5rem;
-        }}
-        .card {{
-            background: #14181f;
-            border: 1px solid #1f2530;
-            padding: 2.5rem 2rem;
-            border-radius: 18px;
-            max-width: 400px;
-            width: 100%;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }}
-        .logo {{ width: 68px; height: 68px; margin-bottom: 1rem; }}
-        h1 {{ font-size: 1.8rem; margin-bottom: 0.5rem; font-weight: 800; }}
-        h1 span {{ color: #ff2a85; }}
-        p {{ color: #94a3b8; font-size: 0.9rem; line-height: 1.5; margin-bottom: 1.75rem; }}
-        .btn {{
-            background: #1db954;
-            color: #000;
-            padding: 0.85rem 1.6rem;
-            border-radius: 999px;
-            font-weight: 700;
-            text-decoration: none;
-            display: inline-block;
-            transition: transform 0.1s ease;
-        }}
-        .btn:active {{ transform: scale(0.98); }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <img src="/static/logo.svg" alt="TicketPulse Logo" class="logo">
-        <h1>Ticket<span>Pulse</span></h1>
-        <p>Live concert radar and exclusive fan rewards powered by your Spotify listening habits.</p>
-        <a href="{auth_url}" class="btn">Connect with Spotify</a>
-    </div>
-</body>
-</html>""", 200
-
-    user_id, email = get_user_id_and_email(sp)
-    ensure_user_wallet_seeded(user_id, email)
-
-    try:
-        results = sp.current_user_top_artists(limit=30, time_range="medium_term")
-    except Exception:
-        session.clear()
-        return redirect("/")
-
     artists = []
     available_categories = set(["All"])
+    email = ""
 
-    for item in results.get("items", []):
-        name = item.get("name")
-        raw_genres = item.get("genres", [])
-        primary_category = categorize_genres(raw_genres)
-        available_categories.add(primary_category)
-        images = item.get("images", [])
-        img_url = images[0]["url"] if images else ""
+    # If logged in via Spotify OAuth (for testers/admins)
+    if sp:
+        user_id, email = get_user_id_and_email(sp)
+        ensure_user_wallet_seeded(user_id, email)
+        try:
+            results = sp.current_user_top_artists(limit=30, time_range="medium_term")
+            for item in results.get("items", []):
+                name = item.get("name")
+                raw_genres = item.get("genres", [])
+                primary_category = categorize_genres(raw_genres)
+                available_categories.add(primary_category)
+                images = item.get("images", [])
+                img_url = images[0]["url"] if images else ""
 
-        artists.append({
-            "id": item.get("id"),
-            "name": name,
-            "category": primary_category,
-            "subgenres": ", ".join(raw_genres[:2]) if raw_genres else "Alternative",
-            "image": img_url
-        })
+                artists.append({
+                    "id": item.get("id"),
+                    "name": name,
+                    "category": primary_category,
+                    "subgenres": ", ".join(raw_genres[:2]) if raw_genres else "Alternative",
+                    "image": img_url
+                })
+        except Exception:
+            session.clear()
 
     sorted_categories = ["All"] + sorted([c for c in available_categories if c != "All"])
+    # Render index for EVERYONE, logged in or not. Allows guest usage.
     return render_template("index.html", artists=artists, categories=sorted_categories, user_email=email)
+
+
+@app.route("/api/packs/<pack_key>")
+def get_taste_pack(pack_key):
+    artists = TASTE_PACKS.get(pack_key, TASTE_PACKS["rock_metal"])
+    pack_data = []
+    for name in artists:
+        img_url = ""
+        category = "Rock"
+        try:
+            res = sp_public.search(q=name, type="artist", limit=1)
+            items = res.get("artists", {}).get("items", [])
+            if items:
+                img_url = items[0].get("images", [{}])[0].get("url", "")
+                raw_genres = items[0].get("genres", [])
+                category = categorize_genres(raw_genres)
+        except Exception:
+            pass
+        pack_data.append({
+            "name": name,
+            "category": category,
+            "image": img_url,
+            "subgenres": "Featured"
+        })
+    return jsonify({"artists": pack_data})
+
+
+@app.route("/api/import/lastfm", methods=["GET"])
+def import_lastfm():
+    username = request.args.get("username", "").strip()
+    if not username:
+        return jsonify({"success": False, "message": "Username is required"}), 400
+    
+    LASTFM_API_KEY = os.getenv("LASTFM_API_KEY", "b25b959554ed76058ac220b7b2e0a026")
+    url = f"http://ws.audioscrobbler.com/2.0/?method=user.gettopartists&user={quote(username)}&api_key={LASTFM_API_KEY}&format=json&limit=25&period=6month"
+    
+    try:
+        r = requests.get(url, timeout=5)
+        if r.status_code != 200:
+            return jsonify({"success": False, "message": "Could not locate Last.fm profile"}), 404
+        
+        raw_artists = r.json().get("topartists", {}).get("artist", [])
+        artists = []
+        for a in raw_artists:
+            name = a.get("name")
+            img_url = ""
+            try:
+                res = sp_public.search(q=name, type="artist", limit=1)
+                items = res.get("artists", {}).get("items", [])
+                if items:
+                    img_url = items[0].get("images", [{}])[0].get("url", "")
+            except Exception:
+                pass
+            
+            artists.append({
+                "name": name,
+                "category": "Imported",
+                "image": img_url,
+                "subgenres": f"{a.get('playcount', 0)} plays"
+            })
+        return jsonify({"success": True, "artists": artists})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route("/api/import/playlist", methods=["POST"])
+def import_playlist():
+    data = request.json or {}
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"success": False, "message": "URL required"}), 400
+
+    try:
+        if "spotify.com/playlist/" in url:
+            playlist_id = url.split("playlist/")[1].split("?")[0]
+            results = sp_public.playlist_tracks(playlist_id, limit=40)
+            seen = set()
+            artists = []
+            for item in results.get("items", []):
+                track = item.get("track")
+                if not track: continue
+                for art in track.get("artists", []):
+                    name = art.get("name")
+                    if name not in seen:
+                        seen.add(name)
+                        img = ""
+                        try:
+                            a_info = sp_public.artist(art.get("id"))
+                            if a_info.get("images"): img = a_info["images"][0]["url"]
+                        except Exception: pass
+                        artists.append({
+                            "name": name,
+                            "category": "Playlist",
+                            "image": img,
+                            "subgenres": "In Playlist"
+                        })
+            return jsonify({"success": True, "artists": artists})
+        else:
+            return jsonify({"success": False, "message": "Only public Spotify playlist links supported currently"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to parse playlist: {str(e)}"}), 500
 
 
 @app.route("/login")
@@ -315,8 +368,7 @@ def logout():
 @app.route("/api/wallet", methods=["GET"])
 def get_wallet():
     sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"points": 0, "email": "", "history": []})
+    if not sp: return jsonify({"points": 0, "email": "", "history": []})
 
     user_id, email = get_user_id_and_email(sp)
     ensure_user_wallet_seeded(user_id, email)
@@ -337,8 +389,7 @@ def get_wallet():
 @app.route("/api/user/email", methods=["POST"])
 def save_user_email():
     sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    if not sp: return jsonify({"success": False, "message": "Unauthorized"}), 401
 
     user_id, _ = get_user_id_and_email(sp)
     data = request.json or {}
@@ -370,10 +421,8 @@ def impact_conversion_webhook():
     data = request.args if request.method == "GET" else (request.json or {})
 
     user_id = data.get("subid1")
-    try:
-        sale_amount = float(data.get("amount", 0.0))
-    except (ValueError, TypeError):
-        sale_amount = 0.0
+    try: sale_amount = float(data.get("amount", 0.0))
+    except (ValueError, TypeError): sale_amount = 0.0
 
     if not user_id or user_id in ["guest", "guest_user"]:
         return jsonify({"status": "ignored", "reason": "No valid user_id"}), 200
@@ -396,8 +445,7 @@ def impact_conversion_webhook():
 @app.route("/api/wallet/redeem", methods=["POST"])
 def redeem_perk():
     sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    if not sp: return jsonify({"success": False, "message": "Unauthorized"}), 401
 
     user_id, _ = get_user_id_and_email(sp)
     ensure_user_wallet_seeded(user_id)
@@ -431,20 +479,17 @@ def redeem_perk():
 def get_artist_events():
     sp = get_current_user_sp()
     user_id = "guest"
-    if sp:
-        user_id, _ = get_user_id_and_email(sp)
+    if sp: user_id, _ = get_user_id_and_email(sp)
 
     artist_name = request.args.get("artist", "").strip()
     postal_code = request.args.get("postal_code", "").strip()
     latlong = request.args.get("latlong", "").strip()
     radius = request.args.get("radius", "150").strip()
 
-    if not artist_name:
-        return jsonify({"events": []})
+    if not artist_name: return jsonify({"events": []})
 
     cache_key = f"{artist_name}_{postal_code}_{latlong}_{radius}"
-    if cache_key in EVENT_CACHE:
-        return jsonify({"events": EVENT_CACHE[cache_key]})
+    if cache_key in EVENT_CACHE: return jsonify({"events": EVENT_CACHE[cache_key]})
 
     att_url = "https://app.ticketmaster.com/discovery/v2/attractions.json"
     att_params = {"apikey": TM_API_KEY, "keyword": artist_name, "size": 3}
@@ -460,8 +505,7 @@ def get_artist_events():
                     break
             if not attraction_id and attractions:
                 attraction_id = attractions[0].get("id")
-    except Exception:
-        pass
+    except Exception: pass
 
     if not attraction_id:
         EVENT_CACHE[cache_key] = []
@@ -503,8 +547,7 @@ def get_artist_events():
                     "state": state,
                     "url": wrap_affiliate_url(raw_url, user_id)
                 })
-    except Exception:
-        pass
+    except Exception: pass
 
     EVENT_CACHE[cache_key] = events
     return jsonify({"events": events})
@@ -514,8 +557,7 @@ def get_artist_events():
 def get_nearby_events():
     sp = get_current_user_sp()
     user_id = "guest"
-    if sp:
-        user_id, _ = get_user_id_and_email(sp)
+    if sp: user_id, _ = get_user_id_and_email(sp)
 
     latlong = request.args.get("latlong", "").strip()
     postal_code = request.args.get("postal_code", "").strip()
@@ -538,8 +580,7 @@ def get_nearby_events():
         ev_params["latlong" if coords else "postalCode"] = coords or postal_code
         ev_params["radius"] = radius
         ev_params["unit"] = "miles"
-    else:
-        return jsonify({"events": []})
+    else: return jsonify({"events": []})
 
     events = []
     try:
@@ -562,8 +603,7 @@ def get_nearby_events():
                     "state": state,
                     "url": wrap_affiliate_url(raw_url, user_id)
                 })
-    except Exception:
-        pass
+    except Exception: pass
 
     return jsonify({"events": events})
 
@@ -571,8 +611,7 @@ def get_nearby_events():
 @app.route("/api/releases")
 def get_releases():
     sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"releases": []})
+    if not sp: return jsonify({"releases": []})
 
     try:
         results = sp.current_user_top_artists(limit=10, time_range="medium_term")
@@ -592,20 +631,17 @@ def get_releases():
                         "image": alb.get("images")[0]["url"] if alb.get("images") else None,
                         "url": alb.get("external_urls", {}).get("spotify", "#")
                     })
-            except Exception:
-                pass
+            except Exception: pass
 
         releases.sort(key=lambda x: x["date"], reverse=True)
         return jsonify({"releases": releases})
-    except Exception:
-        return jsonify({"releases": []})
+    except Exception: return jsonify({"releases": []})
 
 
 @app.route("/api/scan-alerts", methods=["POST"])
 def scan_alerts():
     sp = get_current_user_sp()
-    if not sp:
-        return jsonify({"message": "Unauthorized", "new_alerts": []}), 401
+    if not sp: return jsonify({"message": "Unauthorized", "new_alerts": []}), 401
 
     user_id, _ = get_user_id_and_email(sp)
     data = request.json or {}
@@ -613,9 +649,7 @@ def scan_alerts():
     postal_code = data.get("postal_code", "").strip()
     radius = data.get("radius", "150").strip()
 
-    if not tracked_artists:
-        return jsonify({"message": "No artists currently tracked.", "new_alerts": []})
-
+    if not tracked_artists: return jsonify({"message": "No artists currently tracked.", "new_alerts": []})
     coords = get_lat_long_from_zip(postal_code) if postal_code else None
 
     conn = sqlite3.connect(DB_FILE)
@@ -627,8 +661,7 @@ def scan_alerts():
         att_params = {"apikey": TM_API_KEY, "keyword": artist, "size": 1}
         att_res = requests.get(att_url, params=att_params).json()
         attractions = att_res.get("_embedded", {}).get("attractions", [])
-        if not attractions:
-            continue
+        if not attractions: continue
         att_id = attractions[0].get("id")
 
         ev_url = "https://app.ticketmaster.com/discovery/v2/events.json"
@@ -642,8 +675,7 @@ def scan_alerts():
             ev_params["postalCode"] = postal_code
             ev_params["radius"] = radius
             ev_params["unit"] = "miles"
-        else:
-            ev_params["countryCode"] = "US"
+        else: ev_params["countryCode"] = "US"
 
         ev_res = requests.get(ev_url, params=ev_params).json()
         events = ev_res.get("_embedded", {}).get("events", [])
