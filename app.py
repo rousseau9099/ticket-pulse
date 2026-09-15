@@ -64,7 +64,39 @@ def lastfm_callback():
 # ---------------------------------------------------------
 # Support Endpoints (prevents background fetch errors)
 # ---------------------------------------------------------
-
+@app.route('/api/import/lastfm')
+def api_import_lastfm():
+    username = request.args.get('username')
+    if not username:
+        return jsonify({"success": False, "message": "No username provided"}), 400
+        
+    payload = {
+        'method': 'user.getTopArtists',
+        'user': username,
+        'api_key': LASTFM_API_KEY,
+        'limit': 15,
+        'format': 'json'
+    }
+    
+    try:
+        response = requests.get("http://ws.audioscrobbler.com/2.0/", params=payload, timeout=10)
+        data = response.json()
+        
+        if 'error' in data:
+            return jsonify({"success": False, "message": data.get('message', 'Last.fm API error')})
+            
+        artists = []
+        for artist in data.get('topartists', {}).get('artist', []):
+            artists.append({
+                "name": artist['name'],
+                "category": "Top Artist",
+                "subgenres": "Last.fm",
+                "image": "" # Last.fm removed free image URLs, so we leave this blank
+            })
+            
+        return jsonify({"success": True, "artists": artists})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 @app.route('/api/wallet')
 def api_wallet():
     return jsonify({"points": 0, "status": "active"})
