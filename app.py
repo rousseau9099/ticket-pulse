@@ -64,6 +64,7 @@ def lastfm_callback():
 # ---------------------------------------------------------
 # Support Endpoints (prevents background fetch errors)
 # ---------------------------------------------------------
+
 @app.route('/api/import/lastfm')
 def api_import_lastfm():
     username = request.args.get('username')
@@ -97,6 +98,7 @@ def api_import_lastfm():
         return jsonify({"success": True, "artists": artists})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
+
 @app.route('/api/wallet')
 def api_wallet():
     return jsonify({"points": 0, "status": "active"})
