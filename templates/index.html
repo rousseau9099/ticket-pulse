@@ -31,7 +31,7 @@
       --success: #22c55e;
     }
 
-/* Desktop Header Navigation */
+    /* Desktop Header Navigation */
     .desktop-nav { display: none; gap: 0.5rem; }
     .nav-link {
       background: none; border: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 700;
@@ -168,7 +168,6 @@
     .pack-scroll::-webkit-scrollbar { display: none; }
     .sync-input-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .sync-input-row .radar-input { flex: 2; min-width: 180px; }
-    
     .lastfm-link {
       border-color: rgba(0, 240, 255, 0.25);
       color: var(--accent);
@@ -222,7 +221,7 @@
     .event-date { color: var(--accent); font-size: 0.72rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
     .event-title { font-size: 0.88rem; font-weight: 700; margin: 0.15rem 0 0.2rem; overflow-wrap: anywhere; }
     .event-venue { font-size: 0.76rem; color: var(--text-muted); }
-    
+
     .event-actions { display: flex; gap: 0.4rem; align-items: center; flex-shrink: 0; }
     .btn-ticket {
       background: linear-gradient(135deg, var(--pink), #e60067); color: #fff; border: none;
@@ -312,7 +311,7 @@
     <main>
       <!-- ================= RADAR VIEW ================= -->
       <div id="view-radar" class="tab-view active">
-<!-- VALUE PROP HERO -->
+        <!-- VALUE PROP HERO -->
         <div class="hero-banner">
           <h2>Your Live Music Life, Gamified 🎸</h2>
           <p>Track your favorite touring artists, check-in to live shows, collect state & venue stamps, and unlock legendary concert achievements with other music fans.</p>
@@ -504,13 +503,15 @@
           trackedArtists = data.artists;
           localStorage.setItem('ticketpulse_tracked', JSON.stringify(trackedArtists));
           if (trackedArtists.length > 0) {
-            fetchArtistsEventsParallel(trackedArtists);
+            // Placeholder: fetch tracked artist events if you implement this
+            // fetchArtistsEventsParallel(trackedArtists);
           }
         }
       } catch (e) {
         // Fallback to local storage if guest
         if (trackedArtists.length > 0) {
-          fetchArtistsEventsParallel(trackedArtists);
+          // Placeholder again if you add parallel fetching
+          // fetchArtistsEventsParallel(trackedArtists);
         }
       }
     }
@@ -518,16 +519,21 @@
     function switchView(tab) {
       document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+
       if (tab === 'radar') {
         document.getElementById('view-radar').classList.add('active');
         document.getElementById('tab-btn-radar').classList.add('active');
+        document.getElementById('nav-radar')?.classList.add('active');
       } else if (tab === 'community') {
         document.getElementById('view-community').classList.add('active');
         document.getElementById('tab-btn-community').classList.add('active');
+        document.getElementById('nav-community')?.classList.add('active');
         loadCommunityFeed();
       } else if (tab === 'profile') {
         document.getElementById('view-profile').classList.add('active');
         document.getElementById('tab-btn-profile').classList.add('active');
+        document.getElementById('nav-profile')?.classList.add('active');
         refreshProfileData();
       }
     }
@@ -539,6 +545,7 @@
       document.getElementById('category-bar').style.display = isArtists ? 'flex' : 'none';
       document.getElementById('feed-artists').style.display = isArtists ? 'flex' : 'none';
       document.getElementById('feed-nearby').style.display = isArtists ? 'none' : 'flex';
+      document.getElementById('sb-radar-mode').textContent = isArtists ? 'Top Artists' : 'Nearby Shows';
       if (!isArtists) fetchNearbyShows();
     }
 
@@ -573,6 +580,10 @@
     function renderArtistsFeed(artists) {
       const feed = document.getElementById('feed-artists');
       feed.replaceChildren();
+      if (!artists.length) {
+        feed.appendChild(createStateMessage('No artists found for this source yet.'));
+        return;
+      }
       artists.forEach((artist, idx) => {
         const card = document.createElement('div');
         card.className = 'artist-card';
@@ -590,15 +601,22 @@
           left.appendChild(img);
         }
         const info = document.createElement('div');
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'artist-name', textContent: artist.name }));
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'artist-genre', textContent: artist.category }));
+        const nameEl = document.createElement('div');
+        nameEl.className = 'artist-name';
+        nameEl.textContent = artist.name;
+        const genreEl = document.createElement('div');
+        genreEl.className = 'artist-genre';
+        genreEl.textContent = artist.category || 'Top Artist';
+        info.appendChild(nameEl);
+        info.appendChild(genreEl);
         left.appendChild(info);
         header.appendChild(left);
 
         const trackBtn = document.createElement('button');
         trackBtn.type = 'button';
-        trackBtn.className = `btn-track ${trackedArtists.includes(artist.name) ? 'tracking' : ''}`;
-        trackBtn.textContent = trackedArtists.includes(artist.name) ? '🔔 Tracking' : '🔔 Track';
+        const isTracking = trackedArtists.includes(artist.name);
+        trackBtn.className = `btn-track ${isTracking ? 'tracking' : ''}`;
+        trackBtn.textContent = isTracking ? '🔔 Tracking' : '🔔 Track';
         trackBtn.onclick = () => toggleTrackArtist(artist.name, trackBtn);
         header.appendChild(trackBtn);
 
@@ -621,11 +639,17 @@
       let url = `/api/events?artist=${encodeURIComponent(artistName)}&radius=${radius}`;
       if (currentCoords) url += `&latlong=${encodeURIComponent(currentCoords)}`;
       else if (zip) url += `&postal_code=${encodeURIComponent(zip)}`;
+      document.getElementById('sb-scan-radius').textContent = `${radius} Miles`;
 
       try {
         const data = await fetchJSON(url);
         if (!data.events || !data.events.length) {
-          container.replaceChildren(Object.assign(document.createElement('div'), { className: 'state-message', style: 'padding:0.75rem; font-size:0.75rem;', textContent: 'No upcoming tour dates.' }));
+          const noMsg = document.createElement('div');
+          noMsg.className = 'state-message';
+          noMsg.style.padding = '0.75rem';
+          noMsg.style.fontSize = '0.75rem';
+          noMsg.textContent = 'No upcoming tour dates.';
+          container.replaceChildren(noMsg);
           return;
         }
         renderEventsIntoBox(container, data.events);
@@ -640,6 +664,7 @@
       const container = document.getElementById('nearby-events-container');
       const status = document.getElementById('nearby-status');
       container.replaceChildren(createSkeletonBox());
+      document.getElementById('sb-scan-radius').textContent = `${radius} Miles`;
 
       let url = `/api/nearby?radius=${radius}`;
       if (currentCoords) url += `&latlong=${encodeURIComponent(currentCoords)}`;
@@ -667,9 +692,18 @@
         chip.className = 'event-chip';
 
         const info = document.createElement('div');
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'event-date', textContent: `📅 ${ev.date}` }));
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'event-title', textContent: ev.name }));
-        info.appendChild(Object.assign(document.createElement('div'), { className: 'event-venue', textContent: `📍 ${ev.venue} (${ev.city}, ${ev.state})` }));
+        const dateEl = document.createElement('div');
+        dateEl.className = 'event-date';
+        dateEl.textContent = `📅 ${ev.date}`;
+        const titleEl = document.createElement('div');
+        titleEl.className = 'event-title';
+        titleEl.textContent = ev.name;
+        const venueEl = document.createElement('div');
+        venueEl.className = 'event-venue';
+        venueEl.textContent = `📍 ${ev.venue} (${ev.city}, ${ev.state})`;
+        info.appendChild(dateEl);
+        info.appendChild(titleEl);
+        info.appendChild(venueEl);
         chip.appendChild(info);
 
         const actions = document.createElement('div');
@@ -699,7 +733,7 @@
 
     async function performCheckin(eventData) {
       try {
-        const res = await fetchJSON('/api/checkins', {
+        await fetchJSON('/api/checkins', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ event: eventData, share: true })
@@ -752,9 +786,18 @@
           achRes.achievements.forEach(ach => {
             const card = document.createElement('div');
             card.className = `achievement-card ${ach.unlocked ? 'unlocked' : ''}`;
-            card.appendChild(Object.assign(document.createElement('div'), { className: 'achievement-icon', textContent: ach.icon }));
-            card.appendChild(Object.assign(document.createElement('div'), { className: 'achievement-name', textContent: ach.name }));
-            card.appendChild(Object.assign(document.createElement('div'), { className: 'achievement-desc', textContent: ach.description }));
+            const iconEl = document.createElement('div');
+            iconEl.className = 'achievement-icon';
+            iconEl.textContent = ach.icon;
+            const nameEl = document.createElement('div');
+            nameEl.className = 'achievement-name';
+            nameEl.textContent = ach.name;
+            const descEl = document.createElement('div');
+            descEl.className = 'achievement-desc';
+            descEl.textContent = ach.description;
+            card.appendChild(iconEl);
+            card.appendChild(nameEl);
+            card.appendChild(descEl);
             grid.appendChild(card);
           });
         }
@@ -764,16 +807,28 @@
           const scrapbook = document.getElementById('scrapbook-container');
           scrapbook.replaceChildren();
           if (!historyRes.shows.length) {
-            scrapbook.appendChild(Object.assign(document.createElement('div'), { className: 'state-message', textContent: 'No check-ins recorded yet.' }));
+            const noShows = document.createElement('div');
+            noShows.className = 'state-message';
+            noShows.textContent = 'No check-ins recorded yet.';
+            scrapbook.appendChild(noShows);
             return;
           }
           historyRes.shows.forEach(show => {
             const chip = document.createElement('div');
             chip.className = 'event-chip';
             const info = document.createElement('div');
-            info.appendChild(Object.assign(document.createElement('div'), { className: 'event-date', textContent: `📅 ${show.event_date || 'Attended'}` }));
-            info.appendChild(Object.assign(document.createElement('div'), { className: 'event-title', textContent: show.name }));
-            info.appendChild(Object.assign(document.createElement('div'), { className: 'event-venue', textContent: `📍 ${show.venue} (${show.city}, ${show.state})` }));
+            const dateEl = document.createElement('div');
+            dateEl.className = 'event-date';
+            dateEl.textContent = `📅 ${show.event_date || 'Attended'}`;
+            const titleEl = document.createElement('div');
+            titleEl.className = 'event-title';
+            titleEl.textContent = show.name;
+            const venueEl = document.createElement('div');
+            venueEl.className = 'event-venue';
+            venueEl.textContent = `📍 ${show.venue} (${show.city}, ${show.state})`;
+            info.appendChild(dateEl);
+            info.appendChild(titleEl);
+            info.appendChild(venueEl);
             chip.appendChild(info);
             scrapbook.appendChild(chip);
           });
@@ -790,28 +845,40 @@
         const data = await fetchJSON('/api/community/feed');
         container.replaceChildren();
         if (!data.posts || !data.posts.length) {
-          container.appendChild(Object.assign(document.createElement('div'), { className: 'state-message', textContent: 'No community activity yet. Be the first to check in!' }));
+          container.appendChild(createStateMessage('No community activity yet. Be the first to check in!'));
           return;
         }
         data.posts.forEach(post => {
           const card = document.createElement('div');
           card.className = 'post-card';
-          
+
           const header = document.createElement('div');
           header.className = 'post-header';
-          header.appendChild(Object.assign(document.createElement('div'), { className: 'post-avatar', textContent: '👤' }));
-          
+          const avatar = document.createElement('div');
+          avatar.className = 'post-avatar';
+          avatar.textContent = '👤';
+          header.appendChild(avatar);
+
           const meta = document.createElement('div');
-          meta.appendChild(Object.assign(document.createElement('div'), { className: 'post-author', textContent: post.display_name || post.username }));
-          meta.appendChild(Object.assign(document.createElement('div'), { className: 'post-time', textContent: new Date(post.created_at).toLocaleDateString() }));
+          const author = document.createElement('div');
+          author.className = 'post-author';
+          author.textContent = post.display_name || post.username;
+          const time = document.createElement('div');
+          time.className = 'post-time';
+          time.textContent = new Date(post.created_at).toLocaleDateString();
+          meta.appendChild(author);
+          meta.appendChild(time);
           header.appendChild(meta);
           card.appendChild(header);
 
-          card.appendChild(Object.assign(document.createElement('div'), { className: 'post-body', textContent: post.body }));
+          const body = document.createElement('div');
+          body.className = 'post-body';
+          body.textContent = post.body;
+          card.appendChild(body);
 
           const footer = document.createElement('div');
           footer.className = 'post-footer';
-          
+
           const likeBtn = document.createElement('button');
           likeBtn.type = 'button';
           likeBtn.className = `post-action-btn ${post.liked ? 'liked' : ''}`;
@@ -861,6 +928,18 @@
       el.className = `state-message ${isError ? 'error' : ''}`;
       el.textContent = msg;
       return el;
+    }
+
+    function filterCategory(category) {
+      const cards = document.querySelectorAll('.artist-card');
+      cards.forEach(card => {
+        const cat = card.dataset.category || 'Top Artist';
+        if (category === 'All' || cat === category) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
     }
 
     function locateMe() {
